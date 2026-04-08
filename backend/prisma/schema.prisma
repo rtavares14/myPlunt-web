@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Users ───────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  avatarUrl String?
+  bio       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  plants   Plant[]
+  planters Planter[]
+
+  sentRequests     Friendship[] @relation("FriendshipRequester")
+  receivedRequests Friendship[] @relation("FriendshipAddressee")
+
+  sentReminders     WateringReminder[] @relation("ReminderSender")
+  receivedReminders WateringReminder[] @relation("ReminderReceiver")
+
+  @@map("users")
+}
+
+// ─── Friendships ─────────────────────────────────────────
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+model Friendship {
+  id          String           @id @default(uuid())
+  requesterId String
+  addresseeId String
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id])
+  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id])
+
+  @@unique([requesterId, addresseeId])
+  @@map("friendships")
+}
+
+// ─── Planters ────────────────────────────────────────────
+
+model Planter {
+  id       String  @id @default(uuid())
+  name     String
+  isIndoor Boolean @default(true)
+  ownerId  String
+
+  owner    User    @relation(fields: [ownerId], references: [id])
+  plants   Plant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("planters")
+}
+
+// ─── Plants ──────────────────────────────────────────────
+
+model Plant {
+  id           String    @id @default(uuid())
+  name         String
+  species      String?
+  dateAcquired DateTime  @default(now())
+  lastWatered  DateTime?
+  isDead       Boolean   @default(false)
+
+  // Watering reminder threshold (days). Default 7 if not set.
+  wateringIntervalDays Int @default(7)
+
+  // Location
+  city      String?
+
+  // Environmental thresholds
+  minTemp             Float?
+  maxTemp             Float?
+  minHumidity         Float?
+  maxHumidity         Float?
+  isFrostResistant    Boolean @default(false)
+
+  // Relations
+  ownerId   String
+  planterId String?
+
+  owner   User     @relation(fields: [ownerId], references: [id])
+  planter Planter? @relation(fields: [planterId], references: [id])
+  images  PlantImage[]
+
+  reminders WateringReminder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("plants")
+}
+
+// ─── Plant Images ────────────────────────────────────────
+
+model PlantImage {
+  id        String  @id @default(uuid())
+  url       String  // Cloudinary URL
+  isPrimary Boolean @default(false)
+  plantId   String
+
+  plant Plant @relation(fields: [plantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("plant_images")
+}
+
+// ─── Watering Reminders ──────────────────────────────────
+
+model WateringReminder {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  plantId    String
+  message    String?
+  createdAt  DateTime @default(now())
+
+  sender   User  @relation("ReminderSender", fields: [senderId], references: [id])
+  receiver User  @relation("ReminderReceiver", fields: [receiverId], references: [id])
+  plant    Plant @relation(fields: [plantId], references: [id])
+
+  @@map("watering_reminders")
+}
