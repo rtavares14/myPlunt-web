@@ -1,5 +1,7 @@
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import Box from '@mui/material/Box';
+import Navbar from './components/Navbar';
 import LandingPage from './pages/LandingPage';
 
 const theme = createTheme({
@@ -20,7 +22,10 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <LandingPage />
+      <Box className="min-h-screen flex flex-col">
+        <Navbar />
+        <LandingPage />
+      </Box>
     </ThemeProvider>
   );
 }

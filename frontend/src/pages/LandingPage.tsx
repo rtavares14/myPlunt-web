@@ -5,7 +5,7 @@ import YardIcon from '@mui/icons-material/Yard';
 
 function LandingPage() {
   return (
-    <Box className="min-h-screen bg-gradient-to-br from-plunt-50 via-white to-plunt-100 flex items-center justify-center">
+    <Box className="flex-1 bg-gradient-to-br from-plunt-50 via-white to-plunt-100 flex items-center justify-center">
       <Container maxWidth="sm">
         <Box className="text-center p-8">
           <YardIcon
