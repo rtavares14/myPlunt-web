@@ -1,8 +1,10 @@
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Box from '@mui/material/Box';
+import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import LandingPage from './pages/LandingPage';
+import AuthPage from './pages/AuthPage';
 
 const theme = createTheme({
   palette: {
@@ -22,10 +24,18 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box className="min-h-screen flex flex-col">
-        <Navbar />
-        <LandingPage />
-      </Box>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <Box className="min-h-screen flex flex-col">
+              <Navbar />
+              <LandingPage />
+            </Box>
+          }
+        />
+        <Route path="/auth" element={<AuthPage />} />
+      </Routes>
     </ThemeProvider>
   );
 }

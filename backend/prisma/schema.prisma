@@ -9,15 +9,23 @@ datasource db {
 
 // ─── Users ───────────────────────────────────────────────
 
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+  APPLE
+}
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  password  String
-  avatarUrl String?
-  bio       String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String       @id @default(uuid())
+  email        String       @unique
+  name         String
+  password     String?      // Null for OAuth users
+  authProvider AuthProvider @default(LOCAL)
+  providerId   String?      // OAuth provider user ID
+  avatarUrl    String?
+  bio          String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   plants   Plant[]
   planters Planter[]

@@ -1,9 +1,13 @@
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Container from '@mui/material/Container';
+import Button from '@mui/material/Button';
 import YardIcon from '@mui/icons-material/Yard';
+import { useNavigate } from 'react-router-dom';
 
 function LandingPage() {
+  const navigate = useNavigate();
+
   return (
     <Box className="flex-1 bg-gradient-to-br from-plunt-50 via-white to-plunt-100 flex items-center justify-center">
       <Container maxWidth="sm">
@@ -26,12 +30,22 @@ function LandingPage() {
             Connecting plant lovers everywhere
           </Typography>
           <Box className="w-16 h-1 bg-plunt-400 mx-auto rounded-full mb-6" />
-          <Typography
-            variant="h6"
-            className="!text-gray-500 !italic"
+          <Button
+            variant="contained"
+            size="large"
+            onClick={() => navigate('/auth')}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              px: 4,
+              py: 1.5,
+              fontSize: '1.1rem',
+              backgroundColor: '#16a34a',
+              '&:hover': { backgroundColor: '#15803d' },
+            }}
           >
-            We will be live soon 🌱
-          </Typography>
+            Get Started
+          </Button>
         </Box>
       </Container>
     </Box>

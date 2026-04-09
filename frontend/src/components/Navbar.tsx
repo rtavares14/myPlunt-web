@@ -8,8 +8,11 @@ import Avatar from '@mui/material/Avatar';
 import YardIcon from '@mui/icons-material/Yard';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import PeopleIcon from '@mui/icons-material/People';
+import { useNavigate } from 'react-router-dom';
 
 function Navbar() {
+  const navigate = useNavigate();
+
   return (
     <AppBar position="sticky" sx={{ backgroundColor: '#15803d' }}>
       <Toolbar className="flex justify-between">
@@ -31,7 +34,7 @@ function Navbar() {
             </Badge>
           </IconButton>
 
-          <IconButton className="!ml-1">
+          <IconButton className="!ml-1" onClick={() => navigate('/auth')}>
             <Avatar
               sx={{ width: 32, height: 32, bgcolor: '#dcfce7', color: '#166534' }}
             >
