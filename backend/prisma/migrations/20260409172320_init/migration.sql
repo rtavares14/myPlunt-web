@@ -6,7 +6,7 @@ CREATE TYPE "FriendshipStatus" AS ENUM ('PENDING', 'ACCEPTED', 'BLOCKED');
 
 -- CreateTable
 CREATE TABLE "users" (
-    "id" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
     "email" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "password" TEXT,
@@ -22,9 +22,9 @@ CREATE TABLE "users" (
 
 -- CreateTable
 CREATE TABLE "friendships" (
-    "id" TEXT NOT NULL,
-    "requesterId" TEXT NOT NULL,
-    "addresseeId" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
+    "requesterId" INTEGER NOT NULL,
+    "addresseeId" INTEGER NOT NULL,
     "status" "FriendshipStatus" NOT NULL DEFAULT 'PENDING',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -34,10 +34,10 @@ CREATE TABLE "friendships" (
 
 -- CreateTable
 CREATE TABLE "planters" (
-    "id" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
     "isIndoor" BOOLEAN NOT NULL DEFAULT true,
-    "ownerId" TEXT NOT NULL,
+    "ownerId" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -46,7 +46,7 @@ CREATE TABLE "planters" (
 
 -- CreateTable
 CREATE TABLE "plants" (
-    "id" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
     "species" TEXT,
     "dateAcquired" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -59,8 +59,8 @@ CREATE TABLE "plants" (
     "minHumidity" DOUBLE PRECISION,
     "maxHumidity" DOUBLE PRECISION,
     "isFrostResistant" BOOLEAN NOT NULL DEFAULT false,
-    "ownerId" TEXT NOT NULL,
-    "planterId" TEXT,
+    "ownerId" INTEGER NOT NULL,
+    "planterId" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -69,10 +69,10 @@ CREATE TABLE "plants" (
 
 -- CreateTable
 CREATE TABLE "plant_images" (
-    "id" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
     "url" TEXT NOT NULL,
     "isPrimary" BOOLEAN NOT NULL DEFAULT false,
-    "plantId" TEXT NOT NULL,
+    "plantId" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "plant_images_pkey" PRIMARY KEY ("id")
@@ -80,10 +80,10 @@ CREATE TABLE "plant_images" (
 
 -- CreateTable
 CREATE TABLE "watering_reminders" (
-    "id" TEXT NOT NULL,
-    "senderId" TEXT NOT NULL,
-    "receiverId" TEXT NOT NULL,
-    "plantId" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
+    "senderId" INTEGER NOT NULL,
+    "receiverId" INTEGER NOT NULL,
+    "plantId" INTEGER NOT NULL,
     "message" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
