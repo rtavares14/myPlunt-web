@@ -17,9 +17,9 @@ enum AuthProvider {
 
 model User {
   id           String       @id @default(uuid())
+  name         String
   username     String       @unique
   email        String       @unique
-  name         String
   password     String?
   authProvider AuthProvider @default(LOCAL)
   providerId   String?
@@ -42,6 +42,83 @@ model User {
   receivedReminders WateringReminder[] @relation("ReminderReceiver")
 
   @@map("users")
+}
+
+// ─── Plants ──────────────────────────────────────────────
+
+enum Sunlight {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model Plant {
+  id                   String    @id @default(uuid())
+  ownerId              String
+  planterId            String?
+  name                 String
+  species              String?
+  isDead               Boolean   @default(false)
+  wateringIntervalDays Int       @default(7)
+  sunlight             Sunlight  @default(MEDIUM)
+  minTemp              Float?
+  maxTemp              Float?
+  dateAcquired         DateTime  @default(now())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  owner        User               @relation(fields: [ownerId], references: [id])
+  planter      Planter?           @relation(fields: [planterId], references: [id])
+  images       PlantImage[]
+  wateringLogs WateringLog[]
+  reminders    WateringReminder[]
+
+  @@map("plants")
+}
+
+// ─── Planters ────────────────────────────────────────────
+
+model Planter {
+  id          String   @id @default(uuid())
+  ownerId     String
+  name        String
+  description String?
+  isIndoor    Boolean  @default(true)
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner  User    @relation(fields: [ownerId], references: [id])
+  plants Plant[]
+
+  @@map("planters")
+}
+
+// ─── Watering Log ────────────────────────────────────────
+
+model WateringLog {
+  id        String   @id @default(uuid())
+  plantId   String
+  notes     String?
+  wateredAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  plant Plant @relation(fields: [plantId], references: [id], onDelete: Cascade)
+
+  @@map("watering_logs")
+}
+
+// ─── Plant Images ────────────────────────────────────────
+
+model PlantImage {
+  id        String   @id @default(uuid())
+  plantId   String
+  url       String
+  createdAt DateTime @default(now())
+
+  plant Plant @relation(fields: [plantId], references: [id], onDelete: Cascade)
+
+  @@map("plant_images")
 }
 
 // ─── Friendships ─────────────────────────────────────────
@@ -80,92 +157,6 @@ model UserBlock {
 
   @@unique([blockerId, blockedId])
   @@map("user_blocks")
-}
-
-// ─── Planters ────────────────────────────────────────────
-
-model Planter {
-  id          String  @id @default(uuid())
-  name        String
-  description String?
-  isIndoor    Boolean @default(true)
-  imageUrl    String?
-  ownerId     String
-
-  owner  User    @relation(fields: [ownerId], references: [id])
-  plants Plant[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("planters")
-}
-
-// ─── Plants ──────────────────────────────────────────────
-
-enum Sunlight {
-  HIGH
-  MEDIUM
-  LOW
-}
-
-model Plant {
-  id           String    @id @default(uuid())
-  name         String
-  species      String?
-  dateAcquired DateTime  @default(now())
-  isDead       Boolean   @default(false)
-
-  wateringIntervalDays Int      @default(7)
-  sunlight             Sunlight @default(MEDIUM)
-
-  // Environmental thresholds
-  minTemp Float?
-  maxTemp Float?
-
-  // Relations
-  ownerId   String
-  planterId String?
-
-  owner   User     @relation(fields: [ownerId], references: [id])
-  planter Planter? @relation(fields: [planterId], references: [id])
-  images  PlantImage[]
-
-  wateringLogs WateringLog[]
-  reminders    WateringReminder[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("plants")
-}
-
-// ─── Watering Log ────────────────────────────────────────
-
-model WateringLog {
-  id        String   @id @default(uuid())
-  plantId   String
-  wateredAt DateTime @default(now())
-  notes     String?
-  createdAt DateTime @default(now())
-
-  plant Plant @relation(fields: [plantId], references: [id], onDelete: Cascade)
-
-  @@map("watering_logs")
-}
-
-// ─── Plant Images ────────────────────────────────────────
-
-model PlantImage {
-  id      String @id @default(uuid())
-  url     String
-  plantId String
-
-  plant Plant @relation(fields: [plantId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-
-  @@map("plant_images")
 }
 
 // ─── Watering Reminders ──────────────────────────────────

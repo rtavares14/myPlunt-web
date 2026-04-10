@@ -4,9 +4,9 @@
 | Field | Type | Notes |
 |---|---|---|
 | id | UUID | Primary key |
+| name | String | Display name |
 | username | String | Unique handle |
 | email | String | Unique, used for login |
-| name | String | Display name |
 | password | String? | Nullable for OAuth users |
 | authProvider | AuthProvider | LOCAL, GOOGLE, APPLE (default LOCAL) |
 | providerId | String? | OAuth provider user ID |
@@ -24,20 +24,36 @@
 | Field | Type | Notes |
 |---|---|---|
 | id | UUID | Primary key |
+| ownerId | UUID | FK to User (never null) |
+| planterId | UUID? | FK to Planter (nullable) |
 | name | String | User's name for the plant |
 | species | String? | Botanical/common species |
-| dateAcquired | DateTime | Default now |
 | isDead | Boolean | Default false |
 | wateringIntervalDays | Int | Default 7 days |
 | sunlight | Sunlight | HIGH, MEDIUM, LOW (default MEDIUM) |
 | minTemp | Float? | Weather alert threshold |
 | maxTemp | Float? | Weather alert threshold |
-| ownerId | UUID | FK to User (never null) |
-| planterId | UUID? | FK to Planter (nullable) |
+| dateAcquired | DateTime | Default now |
 | createdAt | DateTime | Auto-set |
 | updatedAt | DateTime | Auto-updated |
 
 **Relations:** owner, planter, images (many), wateringLogs (many), reminders (many)
+
+---
+
+## Planter
+| Field | Type | Notes |
+|---|---|---|
+| id | UUID | Primary key |
+| ownerId | UUID | FK to User |
+| name | String | e.g. "Kitchen windowsill" |
+| description | String? | Optional details |
+| isIndoor | Boolean | Default true |
+| imageUrl | String? | Single image URL |
+| createdAt | DateTime | Auto-set |
+| updatedAt | DateTime | Auto-updated |
+
+**Relations:** owner, plants (many)
 
 ---
 
@@ -46,8 +62,8 @@
 |---|---|---|
 | id | UUID | Primary key |
 | plantId | UUID | FK to Plant |
-| wateredAt | DateTime | When the plant was watered (default now) |
 | notes | String? | Optional notes ("used fertilizer") |
+| wateredAt | DateTime | When the plant was watered (default now) |
 | createdAt | DateTime | When the entry was logged |
 
 **Relations:** plant (cascade delete)
@@ -58,27 +74,11 @@
 | Field | Type | Notes |
 |---|---|---|
 | id | UUID | Primary key |
-| url | String | Cloudinary URL |
 | plantId | UUID | FK to Plant |
+| url | String | Cloudinary URL |
 | createdAt | DateTime | Auto-set |
 
 **Relations:** plant (cascade delete)
-
----
-
-## Planter
-| Field | Type | Notes |
-|---|---|---|
-| id | UUID | Primary key |
-| name | String | e.g. "Kitchen windowsill" |
-| description | String? | Optional details |
-| isIndoor | Boolean | Default true |
-| imageUrl | String? | Single image URL |
-| ownerId | UUID | FK to User |
-| createdAt | DateTime | Auto-set |
-| updatedAt | DateTime | Auto-updated |
-
-**Relations:** owner, plants (many)
 
 ---
 
