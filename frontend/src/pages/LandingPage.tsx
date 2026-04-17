@@ -4,9 +4,11 @@ import Container from '@mui/material/Container';
 import Button from '@mui/material/Button';
 import YardIcon from '@mui/icons-material/Yard';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 function LandingPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     <Box className="flex-1 bg-gradient-to-br from-plunt-50 via-white to-plunt-100 flex items-center justify-center">
@@ -21,7 +23,7 @@ function LandingPage() {
             component="h1"
             className="!font-bold !mb-4 !text-plunt-900"
           >
-            Welcome to Plunt
+            {user ? `Welcome, ${user.name}` : 'Welcome to Plunt'}
           </Typography>
           <Typography
             variant="h5"
@@ -30,22 +32,24 @@ function LandingPage() {
             Connecting plant lovers everywhere
           </Typography>
           <Box className="w-16 h-1 bg-plunt-400 mx-auto rounded-full mb-6" />
-          <Button
-            variant="contained"
-            size="large"
-            onClick={() => navigate('/auth')}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              px: 4,
-              py: 1.5,
-              fontSize: '1.1rem',
-              backgroundColor: '#16a34a',
-              '&:hover': { backgroundColor: '#15803d' },
-            }}
-          >
-            Get Started
-          </Button>
+          {!user && (
+            <Button
+              variant="contained"
+              size="large"
+              onClick={() => navigate('/auth')}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 4,
+                py: 1.5,
+                fontSize: '1.1rem',
+                backgroundColor: '#16a34a',
+                '&:hover': { backgroundColor: '#15803d' },
+              }}
+            >
+              Get Started
+            </Button>
+          )}
         </Box>
       </Container>
     </Box>

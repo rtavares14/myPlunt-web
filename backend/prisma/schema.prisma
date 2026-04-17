@@ -9,28 +9,25 @@ datasource db {
 
 // ─── Users ───────────────────────────────────────────────
 
-enum AuthProvider {
-  LOCAL
-  GOOGLE
-  APPLE
-}
-
 model User {
-  id           String       @id @default(uuid())
-  name         String
-  username     String       @unique
-  email        String       @unique
-  password     String?
-  authProvider AuthProvider @default(LOCAL)
-  providerId   String?
-  avatarUrl    String?
-  bio          String?
-  city         String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id              String    @id @default(uuid())
+  name            String
+  username        String    @unique
+  email           String    @unique
+  password        String?
+  googleId        String?   @unique
+  appleId         String?   @unique
+  avatarUrl       String?
+  bio             String?
+  city            String?
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  plants   Plant[]
-  planters Planter[]
+  plants     Plant[]
+  planters   Planter[]
+  sessions   Session[]
+  authTokens AuthToken[]
 
   sentRequests     Friendship[] @relation("FriendshipRequester")
   receivedRequests Friendship[] @relation("FriendshipAddressee")
@@ -44,12 +41,57 @@ model User {
   @@map("users")
 }
 
+// ─── Auth tokens (email verify, password reset) ──────────
+
+enum TokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+
+  @@map("token_purpose")
+}
+
+model AuthToken {
+  id        String       @id @default(uuid())
+  userId    String
+  tokenHash String       @unique
+  purpose   TokenPurpose
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("auth_tokens")
+}
+
+// ─── Sessions (refresh tokens) ───────────────────────────
+
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ip               String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
 // ─── Plants ──────────────────────────────────────────────
 
 enum Sunlight {
   HIGH
   MEDIUM
   LOW
+
+  @@map("sunlight")
 }
 
 model Plant {
@@ -63,16 +105,18 @@ model Plant {
   sunlight             Sunlight  @default(MEDIUM)
   minTemp              Float?
   maxTemp              Float?
+  lastWateredAt        DateTime?
   dateAcquired         DateTime  @default(now())
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  owner        User               @relation(fields: [ownerId], references: [id])
-  planter      Planter?           @relation(fields: [planterId], references: [id])
+  owner        User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  planter      Planter?           @relation(fields: [planterId], references: [id], onDelete: SetNull)
   images       PlantImage[]
   wateringLogs WateringLog[]
   reminders    WateringReminder[]
 
+  @@index([ownerId])
   @@map("plants")
 }
 
@@ -88,9 +132,10 @@ model Planter {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  owner  User    @relation(fields: [ownerId], references: [id])
+  owner  User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   plants Plant[]
 
+  @@index([ownerId])
   @@map("planters")
 }
 
@@ -127,6 +172,8 @@ enum FriendshipStatus {
   PENDING
   ACCEPTED
   DECLINED
+
+  @@map("friendship_status")
 }
 
 model Friendship {
@@ -137,8 +184,8 @@ model Friendship {
   sentAt      DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id])
-  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id])
+  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
 
   @@unique([requesterId, addresseeId])
   @@map("friendships")
@@ -152,8 +199,8 @@ model UserBlock {
   blockedId String
   blockedAt DateTime @default(now())
 
-  blocker User @relation("Blocker", fields: [blockerId], references: [id])
-  blocked User @relation("Blocked", fields: [blockedId], references: [id])
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
 
   @@unique([blockerId, blockedId])
   @@map("user_blocks")
@@ -170,9 +217,9 @@ model WateringReminder {
   sentAt     DateTime  @default(now())
   readAt     DateTime?
 
-  sender   User  @relation("ReminderSender", fields: [senderId], references: [id])
-  receiver User  @relation("ReminderReceiver", fields: [receiverId], references: [id])
-  plant    Plant @relation(fields: [plantId], references: [id])
+  sender   User  @relation("ReminderSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User  @relation("ReminderReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  plant    Plant @relation(fields: [plantId], references: [id], onDelete: Cascade)
 
   @@map("watering_reminders")
 }

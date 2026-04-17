@@ -1,6 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+if (!process.env.JWT_SECRET) {
+  if (IS_PROD) {
+    throw new Error('JWT_SECRET must be set in production');
+  }
+  console.warn('[auth] JWT_SECRET not set — using insecure dev fallback');
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'plunt-dev-secret';
 
 export interface JwtPayload {
@@ -17,7 +26,7 @@ declare global {
 }
 
 export function generateToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
 }
 
 export function verifyToken(token: string): JwtPayload {

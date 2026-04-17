@@ -9,20 +9,32 @@ import Alert from '@mui/material/Alert';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import CircularProgress from '@mui/material/CircularProgress';
+import Tooltip from '@mui/material/Tooltip';
 import YardIcon from '@mui/icons-material/Yard';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
-import GoogleIcon from '@mui/icons-material/Google';
 import AppleIcon from '@mui/icons-material/Apple';
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const APPLE_SIGNIN_ENABLED = import.meta.env.VITE_APPLE_SIGNIN_ENABLED === 'true';
 
 type AuthMode = 'login' | 'signup';
 
 function AuthPage() {
+  const navigate = useNavigate();
+  const { user, login } = useAuth();
+
+  // Already logged in — go home
+  if (user) {
+    navigate('/');
+    return null;
+  }
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -41,12 +53,13 @@ function AuthPage() {
     const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
     const body = mode === 'login'
       ? { email, password }
-      : { email, name, password };
+      : { email, name, username, password };
 
     try {
-      const res = await fetch(`${API_URL}${endpoint}`, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(body),
       });
 
@@ -57,9 +70,8 @@ function AuthPage() {
         return;
       }
 
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      window.location.href = '/';
+      login(data.token, data.user);
+      navigate('/');
     } catch {
       setError('Unable to connect to server');
     } finally {
@@ -67,10 +79,32 @@ function AuthPage() {
     }
   };
 
-  const handleOAuth = (provider: 'google' | 'apple') => {
-    // TODO: Integrate real OAuth SDK (Google Identity Services / Sign in with Apple JS)
-    // For now, show a placeholder message
-    setError(`${provider === 'google' ? 'Google' : 'Apple'} sign-in will be available soon`);
+  const handleGoogleSuccess = async (resp: CredentialResponse) => {
+    if (!resp.credential) {
+      setError('Google sign-in failed');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ credential: resp.credential }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Google sign-in failed');
+        return;
+      }
+      login(data.token, data.user);
+      navigate('/');
+    } catch {
+      setError('Unable to connect to server');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -93,39 +127,44 @@ function AuthPage() {
         </Box>
 
         {/* Social buttons */}
-        <Box className="flex flex-col gap-3 mb-4">
-          <Button
-            variant="outlined"
-            fullWidth
-            startIcon={<GoogleIcon />}
-            onClick={() => handleOAuth('google')}
-            sx={{
-              borderColor: '#e5e7eb',
-              color: '#374151',
-              textTransform: 'none',
-              fontWeight: 500,
-              py: 1.2,
-              '&:hover': { borderColor: '#d1d5db', backgroundColor: '#f9fafb' },
-            }}
+        <Box className="flex flex-col gap-3 mb-4 items-stretch">
+          <Box className="flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError('Google sign-in failed')}
+              theme="outline"
+              size="large"
+              text="continue_with"
+              shape="rectangular"
+              width="356"
+            />
+          </Box>
+          <Tooltip
+            title={
+              APPLE_SIGNIN_ENABLED
+                ? ''
+                : 'Apple sign-in coming soon — requires a paid Apple Developer account'
+            }
           >
-            Continue with Google
-          </Button>
-          <Button
-            variant="outlined"
-            fullWidth
-            startIcon={<AppleIcon />}
-            onClick={() => handleOAuth('apple')}
-            sx={{
-              borderColor: '#e5e7eb',
-              color: '#374151',
-              textTransform: 'none',
-              fontWeight: 500,
-              py: 1.2,
-              '&:hover': { borderColor: '#d1d5db', backgroundColor: '#f9fafb' },
-            }}
-          >
-            Continue with Apple
-          </Button>
+            <span>
+              <Button
+                variant="outlined"
+                fullWidth
+                disabled={!APPLE_SIGNIN_ENABLED}
+                startIcon={<AppleIcon />}
+                sx={{
+                  borderColor: '#e5e7eb',
+                  color: '#374151',
+                  textTransform: 'none',
+                  fontWeight: 500,
+                  py: 1.2,
+                  '&:hover': { borderColor: '#d1d5db', backgroundColor: '#f9fafb' },
+                }}
+              >
+                Continue with Apple
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
 
         <Divider className="!my-4">
@@ -143,15 +182,26 @@ function AuthPage() {
 
         <Box component="form" onSubmit={handleSubmit} className="flex flex-col gap-3">
           {mode === 'signup' && (
-            <TextField
-              label="Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              fullWidth
-              size="small"
-              autoComplete="name"
-            />
+            <>
+              <TextField
+                label="Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                fullWidth
+                size="small"
+                autoComplete="name"
+              />
+              <TextField
+                label="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                fullWidth
+                size="small"
+                autoComplete="username"
+              />
+            </>
           )}
 
           <TextField
@@ -214,6 +264,18 @@ function AuthPage() {
               'Create account'
             )}
           </Button>
+
+          {mode === 'login' && (
+            <Typography
+              variant="body2"
+              component={RouterLink}
+              to="/forgot-password"
+              className="!text-center !text-plunt-600 !mt-1 hover:underline"
+              sx={{ textDecoration: 'none' }}
+            >
+              Forgot password?
+            </Typography>
+          )}
         </Box>
 
         {/* Toggle mode */}
