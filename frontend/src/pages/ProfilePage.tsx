@@ -13,6 +13,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import SessionsSection from '../components/SessionsSection';
 
 function ProfilePage() {
   const { user, logout, authFetch, refreshUser } = useAuth();
@@ -207,6 +208,13 @@ function ProfilePage() {
             </Box>
           </Box>
         )}
+
+        <Divider className="!my-6" />
+
+        <Typography variant="subtitle2" className="!font-bold !text-gray-700 !mb-3">
+          Active sessions
+        </Typography>
+        <SessionsSection />
 
         <Divider className="!my-4" />
 

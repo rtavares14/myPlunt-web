@@ -17,6 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'plunt-dev-secret';
 export interface JwtPayload {
   userId: string;
   email: string;
+  sessionId: string;
 }
 
 declare global {

@@ -21,10 +21,13 @@ function requestMeta(req: Request) {
   };
 }
 
-async function createSession(req: Request, userId: string): Promise<string> {
+async function createSession(
+  req: Request,
+  userId: string,
+): Promise<{ token: string; sessionId: string }> {
   const token = crypto.randomBytes(REFRESH_TOKEN_BYTES).toString('base64url');
   const { userAgent, ip } = requestMeta(req);
-  await getPrisma().session.create({
+  const row = await getPrisma().session.create({
     data: {
       userId,
       refreshTokenHash: hashRefreshToken(token),
@@ -33,7 +36,7 @@ async function createSession(req: Request, userId: string): Promise<string> {
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
     },
   });
-  return token;
+  return { token, sessionId: row.id };
 }
 
 function setRefreshCookie(res: Response, token: string) {
@@ -55,9 +58,9 @@ export async function issueTokens(
   res: Response,
   user: { id: string; email: string },
 ): Promise<string> {
-  const refreshToken = await createSession(req, user.id);
+  const { token: refreshToken, sessionId } = await createSession(req, user.id);
   setRefreshCookie(res, refreshToken);
-  return generateToken({ userId: user.id, email: user.email });
+  return generateToken({ userId: user.id, email: user.email, sessionId });
 }
 
 /**

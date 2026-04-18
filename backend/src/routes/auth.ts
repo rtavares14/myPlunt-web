@@ -13,6 +13,7 @@ import {
 } from '../lib/session';
 import { createAuthToken, consumeAuthToken } from '../lib/authTokens';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../lib/email';
+import { isPasswordPwned } from '../lib/pwnedPasswords';
 
 const router = Router();
 
@@ -49,6 +50,10 @@ const byIpAndEmail = (req: Request, res: Response) => {
   const email = normalizeEmail(req.body?.email) ?? '';
   return `${ipKeyGenerator(req.ip ?? '', 56)}|${email}`;
 };
+// Bypass IP-keyed limiters under test — otherwise register/etc. limits accumulate
+// across tests (same localhost IP) and mask real failures. The login limiter is
+// excluded below since we explicitly verify the limit behavior.
+const skipInTest = () => process.env.NODE_ENV === 'test';
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -65,6 +70,7 @@ const registerLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: byIp,
+  skip: skipInTest,
   message: { error: 'Too many accounts from this address, try again later.' },
 });
 
@@ -74,6 +80,7 @@ const forgotPasswordLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: byIpAndEmail,
+  skip: skipInTest,
   message: { error: 'Too many requests, try again later.' },
 });
 
@@ -83,6 +90,7 @@ const resetPasswordLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: byIp,
+  skip: skipInTest,
   message: { error: 'Too many requests, try again later.' },
 });
 
@@ -92,6 +100,7 @@ const verifyEmailLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: byIp,
+  skip: skipInTest,
   message: { error: 'Too many requests, try again later.' },
 });
 
@@ -101,6 +110,7 @@ const resendVerificationLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: byIp,
+  skip: skipInTest,
   message: { error: 'Too many requests, try again later.' },
 });
 
@@ -110,6 +120,7 @@ const oauthLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: byIp,
+  skip: skipInTest,
   message: { error: 'Too many requests, try again later.' },
 });
 
@@ -214,6 +225,12 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
     }
     if (typeof password !== 'string' || password.length < 8 || password.length > 72) {
       res.status(400).json({ error: 'Password must be between 8 and 72 characters' });
+      return;
+    }
+    if (await isPasswordPwned(password)) {
+      res.status(400).json({
+        error: 'This password has appeared in known data breaches. Please choose a different one.',
+      });
       return;
     }
 
@@ -480,6 +497,12 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
       res.status(400).json({ error: 'Password must be between 8 and 72 characters' });
       return;
     }
+    if (await isPasswordPwned(password)) {
+      res.status(400).json({
+        error: 'This password has appeared in known data breaches. Please choose a different one.',
+      });
+      return;
+    }
 
     const userId = await consumeAuthToken(token, 'PASSWORD_RESET');
     if (!userId) {
@@ -569,6 +592,88 @@ router.post('/link-google', oauthLimiter, authMiddleware, async (req: Request, r
   } catch (err) {
     req.log.error({ err }, 'Link Google error');
     res.status(500).json({ error: 'Failed to link Google account' });
+  }
+});
+
+// ─── Sessions management ─────────────────────────────────
+
+router.get('/sessions', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const rows = await getPrisma().session.findMany({
+      where: {
+        userId: req.user!.userId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        userAgent: true,
+        ip: true,
+        createdAt: true,
+        updatedAt: true,
+        expiresAt: true,
+      },
+    });
+    const currentId = req.user!.sessionId;
+    res.json({
+      sessions: rows.map((r) => ({ ...r, isCurrent: r.id === currentId })),
+    });
+  } catch (err) {
+    req.log.error({ err }, 'List sessions error');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.delete('/sessions/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const userId = req.user!.userId;
+    if (typeof id !== 'string' || !id) {
+      res.status(400).json({ error: 'Invalid session id' });
+      return;
+    }
+
+    const result = await getPrisma().session.updateMany({
+      where: { id, userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (result.count === 0) {
+      res.status(404).json({ error: 'Session not found' });
+      return;
+    }
+
+    // If the user revoked the session they're currently on, also clear the cookie.
+    if (id === req.user!.sessionId) {
+      clearRefreshCookie(res);
+    }
+    res.status(204).end();
+  } catch (err) {
+    req.log.error({ err }, 'Revoke session error');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/logout-all', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const keepCurrent = req.body?.keepCurrent !== false; // default true
+    const userId = req.user!.userId;
+    const currentId = req.user!.sessionId;
+
+    await getPrisma().session.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+        ...(keepCurrent ? { NOT: { id: currentId } } : {}),
+      },
+      data: { revokedAt: new Date() },
+    });
+
+    if (!keepCurrent) clearRefreshCookie(res);
+    res.status(204).end();
+  } catch (err) {
+    req.log.error({ err }, 'Logout-all error');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
