@@ -35,3 +35,14 @@ export async function sendPasswordResetEmail(to: string, token: string) {
     `Reset your Plunt password: ${link}\n\nLink expires in 1 hour. If you didn't request this, ignore this email.`,
   );
 }
+
+export async function sendPasswordChangedEmail(to: string) {
+  const resetLink = `${FRONTEND_URL}/forgot-password`;
+  const when = new Date().toUTCString();
+  await send(
+    to,
+    'Your Plunt password was changed',
+    `<p>Your Plunt password was just changed (${when}).</p><p>If this wasn't you, <a href="${resetLink}">reset your password immediately</a> — your other sessions have already been signed out as a precaution.</p>`,
+    `Your Plunt password was just changed (${when}).\n\nIf this wasn't you, reset your password immediately at ${resetLink}. Your other sessions have already been signed out as a precaution.`,
+  );
+}

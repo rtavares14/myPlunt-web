@@ -12,7 +12,11 @@ import {
   rotateSession,
 } from '../lib/session';
 import { createAuthToken, consumeAuthToken } from '../lib/authTokens';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../lib/email';
+import {
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+  sendPasswordChangedEmail,
+} from '../lib/email';
 import { isPasswordPwned } from '../lib/pwnedPasswords';
 
 const router = Router();
@@ -511,7 +515,7 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    await getPrisma().user.update({
+    const updated = await getPrisma().user.update({
       where: { id: userId },
       data: { password: hashedPassword },
     });
@@ -522,6 +526,11 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+
+    // Let the legitimate owner notice if they didn't trigger this.
+    sendPasswordChangedEmail(updated.email).catch((err) =>
+      req.log.error({ err }, 'Failed to send password-changed email'),
+    );
 
     res.status(204).end();
   } catch (err) {
