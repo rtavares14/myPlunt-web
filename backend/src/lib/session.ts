@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import type { Request, Response } from 'express';
+import type { UserModel } from '../generated/prisma/models';
 import { getPrisma } from './prisma';
 import { generateToken } from '../middleware/auth';
 
@@ -61,30 +62,42 @@ export async function issueTokens(
 
 /**
  * Rotate the current refresh token: revoke the old session row and issue a new one.
- * Returns a fresh access token. Returns null if the refresh token is unknown,
+ * Returns { accessToken, user } on success, or null if the refresh token is unknown,
  * revoked, or expired (caller should clear the cookie and 401).
+ *
+ * If the presented token exists but was already revoked, treat it as a theft signal
+ * and revoke every live session for that user.
  */
 export async function rotateSession(
   req: Request,
   res: Response,
   presentedToken: string,
-): Promise<string | null> {
+): Promise<{ accessToken: string; user: UserModel } | null> {
   const prisma = getPrisma();
   const session = await prisma.session.findUnique({
     where: { refreshTokenHash: hashRefreshToken(presentedToken) },
-    include: { user: { select: { id: true, email: true } } },
+    include: { user: true },
   });
 
-  if (!session || session.revokedAt || session.expiresAt < new Date()) {
+  if (!session) return null;
+
+  if (session.revokedAt) {
+    await prisma.session.updateMany({
+      where: { userId: session.userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
     return null;
   }
+
+  if (session.expiresAt < new Date()) return null;
 
   await prisma.session.update({
     where: { id: session.id },
     data: { revokedAt: new Date() },
   });
 
-  return issueTokens(req, res, session.user);
+  const accessToken = await issueTokens(req, res, session.user);
+  return { accessToken, user: session.user };
 }
 
 export async function revokeSessionByToken(presentedToken: string): Promise<void> {

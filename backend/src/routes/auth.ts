@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { OAuth2Client } from 'google-auth-library';
 import { getPrisma } from '../lib/prisma';
 import { authMiddleware } from '../middleware/auth';
@@ -18,6 +19,90 @@ const router = Router();
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 const APPLE_SIGNIN_ENABLED = process.env.APPLE_SIGNIN_ENABLED === 'true';
+
+// Consumed on failed login so response time doesn't reveal account existence.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('plunt-timing-placeholder', 12);
+
+const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
+const RESERVED_USERNAMES = new Set([
+  'admin', 'administrator', 'root', 'support', 'help', 'api', 'www',
+  'mail', 'plunt', 'official', 'moderator', 'staff', 'team', 'me',
+]);
+
+function normalizeEmail(email: unknown): string | null {
+  if (typeof email !== 'string') return null;
+  const trimmed = email.trim().toLowerCase();
+  if (trimmed.length < 3 || trimmed.length > 254 || !trimmed.includes('@')) return null;
+  return trimmed;
+}
+
+function normalizeUsername(username: unknown): string | null {
+  if (typeof username !== 'string') return null;
+  const trimmed = username.trim().toLowerCase();
+  if (!USERNAME_RE.test(trimmed) || RESERVED_USERNAMES.has(trimmed)) return null;
+  return trimmed;
+}
+
+// Per-route rate limiters. keyed by IP, or IP+email for credential/email flows.
+const byIp = (req: Request, res: Response) => ipKeyGenerator(req.ip ?? '', 56);
+const byIpAndEmail = (req: Request, res: Response) => {
+  const email = normalizeEmail(req.body?.email) ?? '';
+  return `${ipKeyGenerator(req.ip ?? '', 56)}|${email}`;
+};
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: byIpAndEmail,
+  message: { error: 'Too many login attempts, try again later.' },
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: byIp,
+  message: { error: 'Too many accounts from this address, try again later.' },
+});
+
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: byIpAndEmail,
+  message: { error: 'Too many requests, try again later.' },
+});
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: byIp,
+  message: { error: 'Too many requests, try again later.' },
+});
+
+const verifyEmailLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: byIp,
+  message: { error: 'Too many requests, try again later.' },
+});
+
+const oauthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: byIp,
+  message: { error: 'Too many requests, try again later.' },
+});
 
 class OauthLinkError extends Error {
   status: number;
@@ -96,27 +181,42 @@ async function upsertGoogleUser(params: {
 
 // ─── Register (email + password) ─────────────────────────
 
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', registerLimiter, async (req: Request, res: Response) => {
   try {
     const { email, name, username, password } = req.body;
 
-    if (!email || !name || !username || !password) {
-      res.status(400).json({ error: 'Email, name, username, and password are required' });
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedUsername = normalizeUsername(username);
+    const trimmedName = typeof name === 'string' ? name.trim() : '';
+
+    if (!normalizedEmail) {
+      res.status(400).json({ error: 'A valid email is required' });
       return;
     }
-
-    if (password.length < 8 || password.length > 72) {
+    if (!normalizedUsername) {
+      res.status(400).json({
+        error: 'Username must be 3–20 characters (letters, numbers, underscore) and not reserved',
+      });
+      return;
+    }
+    if (!trimmedName || trimmedName.length > 80) {
+      res.status(400).json({ error: 'Name is required (max 80 characters)' });
+      return;
+    }
+    if (typeof password !== 'string' || password.length < 8 || password.length > 72) {
       res.status(400).json({ error: 'Password must be between 8 and 72 characters' });
       return;
     }
 
-    const existing = await getPrisma().user.findUnique({ where: { email } });
+    const existing = await getPrisma().user.findUnique({ where: { email: normalizedEmail } });
     if (existing) {
       res.status(409).json({ error: 'Email already in use' });
       return;
     }
 
-    const existingUsername = await getPrisma().user.findUnique({ where: { username } });
+    const existingUsername = await getPrisma().user.findUnique({
+      where: { username: normalizedUsername },
+    });
     if (existingUsername) {
       res.status(409).json({ error: 'Username already taken' });
       return;
@@ -126,9 +226,9 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const user = await getPrisma().user.create({
       data: {
-        email,
-        name,
-        username,
+        email: normalizedEmail,
+        name: trimmedName,
+        username: normalizedUsername,
         password: hashedPassword,
       },
     });
@@ -149,30 +249,30 @@ router.post('/register', async (req: Request, res: Response) => {
 
 // ─── Login (email + password) ────────────────────────────
 
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', loginLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
+    const presentedPassword = typeof password === 'string' ? password : '';
 
-    if (!email || !password) {
+    // Always run bcrypt — against the real hash if the user exists, otherwise against
+    // a constant dummy hash — so response time doesn't reveal account existence.
+    const user = normalizedEmail
+      ? await getPrisma().user.findUnique({ where: { email: normalizedEmail } })
+      : null;
+    const storedHash = user?.password ?? DUMMY_PASSWORD_HASH;
+    const valid = await bcrypt.compare(presentedPassword, storedHash);
+
+    if (!normalizedEmail || !presentedPassword) {
       res.status(400).json({ error: 'Email and password are required' });
       return;
     }
-
-    const user = await getPrisma().user.findUnique({ where: { email } });
-
-    if (!user || !user.password) {
-      res.status(401).json({ error: 'Invalid email or password' });
-      return;
-    }
-
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
+    if (!user || !user.password || !valid) {
       res.status(401).json({ error: 'Invalid email or password' });
       return;
     }
 
     const token = await issueTokens(req, res, user);
-
     res.json({ token, user: toPublicUser(user) });
   } catch (error) {
     console.error('Login error:', error);
@@ -182,7 +282,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
 // ─── Google sign-in ──────────────────────────────────────
 
-router.post('/google', async (req: Request, res: Response) => {
+router.post('/google', oauthLimiter, async (req: Request, res: Response) => {
   try {
     if (!googleClient) {
       res.status(503).json({ error: 'Google sign-in is not configured on the server' });
@@ -209,9 +309,15 @@ router.post('/google', async (req: Request, res: Response) => {
       return;
     }
 
+    const normalizedEmail = normalizeEmail(payload.email);
+    if (!normalizedEmail) {
+      res.status(401).json({ error: 'Google account returned an invalid email' });
+      return;
+    }
+
     const user = await upsertGoogleUser({
-      email: payload.email,
-      name: payload.name || payload.email.split('@')[0],
+      email: normalizedEmail,
+      name: payload.name || normalizedEmail.split('@')[0],
       googleId: payload.sub,
       avatarUrl: payload.picture ?? null,
     });
@@ -230,7 +336,7 @@ router.post('/google', async (req: Request, res: Response) => {
 
 // ─── Apple sign-in (feature-flagged) ─────────────────────
 
-router.post('/apple', async (_req: Request, res: Response) => {
+router.post('/apple', oauthLimiter, async (_req: Request, res: Response) => {
   if (!APPLE_SIGNIN_ENABLED) {
     res.status(501).json({
       error: 'Apple sign-in is not available yet. Requires a paid Apple Developer Program membership.',
@@ -252,22 +358,14 @@ router.post('/refresh', async (req: Request, res: Response) => {
       return;
     }
 
-    const accessToken = await rotateSession(req, res, presented);
-    if (!accessToken) {
+    const rotated = await rotateSession(req, res, presented);
+    if (!rotated) {
       clearRefreshCookie(res);
       res.status(401).json({ error: 'Session expired' });
       return;
     }
 
-    const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString());
-    const user = await getPrisma().user.findUnique({ where: { id: payload.userId } });
-    if (!user) {
-      clearRefreshCookie(res);
-      res.status(401).json({ error: 'User no longer exists' });
-      return;
-    }
-
-    res.json({ token: accessToken, user: toPublicUser(user) });
+    res.json({ token: rotated.accessToken, user: toPublicUser(rotated.user) });
   } catch (error) {
     console.error('Refresh error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -276,7 +374,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
 // ─── Email verification ──────────────────────────────────
 
-router.post('/verify-email', async (req: Request, res: Response) => {
+router.post('/verify-email', verifyEmailLimiter, async (req: Request, res: Response) => {
   try {
     const { token } = req.body;
     if (!token || typeof token !== 'string') {
@@ -304,15 +402,16 @@ router.post('/verify-email', async (req: Request, res: Response) => {
 
 // ─── Password reset ──────────────────────────────────────
 
-router.post('/forgot-password', async (req: Request, res: Response) => {
+router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res: Response) => {
   try {
-    const { email } = req.body;
-    if (!email || typeof email !== 'string') {
-      res.status(400).json({ error: 'email is required' });
+    const normalizedEmail = normalizeEmail(req.body?.email);
+    if (!normalizedEmail) {
+      // Same 204 as the success path to preserve enumeration-safety.
+      res.status(204).end();
       return;
     }
 
-    const user = await getPrisma().user.findUnique({ where: { email } });
+    const user = await getPrisma().user.findUnique({ where: { email: normalizedEmail } });
     // Only send the email if the user exists and has a password to reset.
     // Always return 204 either way to prevent user enumeration.
     if (user?.password) {
@@ -329,7 +428,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/reset-password', async (req: Request, res: Response) => {
+router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: Response) => {
   try {
     const { token, password } = req.body;
     if (!token || typeof token !== 'string' || !password || typeof password !== 'string') {
@@ -369,7 +468,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
 // ─── Link Google to the currently signed-in account ──────
 
-router.post('/link-google', authMiddleware, async (req: Request, res: Response) => {
+router.post('/link-google', oauthLimiter, authMiddleware, async (req: Request, res: Response) => {
   try {
     if (!googleClient) {
       res.status(503).json({ error: 'Google sign-in is not configured on the server' });

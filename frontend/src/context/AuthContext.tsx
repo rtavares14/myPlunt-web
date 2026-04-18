@@ -17,7 +17,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (token: string, user: User) => void;
   logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  refreshUser: () => Promise<string | null>;
   authFetch: (input: string, init?: RequestInit) => Promise<Response>;
 }
 
@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const tokenRef = useRef<string | null>(null);
   tokenRef.current = token;
 
-  const refreshUser = async () => {
+  const refreshUser = async (): Promise<string | null> => {
     const res = await fetch('/api/auth/refresh', {
       method: 'POST',
       credentials: 'include',
@@ -38,11 +38,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!res.ok) {
       setToken(null);
       setUser(null);
-      return;
+      tokenRef.current = null;
+      return null;
     }
     const data = await res.json();
     setToken(data.token);
     setUser(data.user);
+    // Update the ref synchronously so authFetch's retry path sees the fresh token
+    // without waiting for React to flush the state update.
+    tokenRef.current = data.token;
+    return data.token;
   };
 
   useEffect(() => {
@@ -93,8 +98,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const first = await fetch(input, withAuth(tokenRef.current));
     if (first.status !== 401) return first;
 
-    await refreshUser();
-    return fetch(input, withAuth(tokenRef.current));
+    const refreshed = await refreshUser();
+    if (!refreshed) return first;
+    return fetch(input, withAuth(refreshed));
   };
 
   return (
