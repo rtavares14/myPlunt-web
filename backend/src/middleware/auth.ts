@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { getPrisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -7,7 +9,7 @@ if (!process.env.JWT_SECRET) {
   if (IS_PROD) {
     throw new Error('JWT_SECRET must be set in production');
   }
-  console.warn('[auth] JWT_SECRET not set — using insecure dev fallback');
+  logger.warn('JWT_SECRET not set — using insecure dev fallback');
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || 'plunt-dev-secret';
@@ -47,4 +49,29 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });
   }
+}
+
+/**
+ * Stacks after authMiddleware. Rejects with 403 if the authenticated user hasn't
+ * verified their email yet. Does a fresh DB read so a user who just clicked the
+ * verification link doesn't have to wait for their access token to rotate.
+ */
+export async function requireVerified(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ error: 'Not authenticated' });
+    return;
+  }
+  const user = await getPrisma().user.findUnique({
+    where: { id: req.user.userId },
+    select: { emailVerifiedAt: true },
+  });
+  if (!user?.emailVerifiedAt) {
+    res.status(403).json({ error: 'Email not verified' });
+    return;
+  }
+  next();
 }

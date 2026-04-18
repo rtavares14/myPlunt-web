@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { logger } from './logger';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'Plunt <onboarding@resend.dev>';
@@ -8,10 +9,7 @@ const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
 async function send(to: string, subject: string, html: string, text: string) {
   if (!resend) {
-    console.log('\n📧 [email] (RESEND_API_KEY not set — dev mode, logging only)');
-    console.log(`  To: ${to}`);
-    console.log(`  Subject: ${subject}`);
-    console.log(`  ${text}\n`);
+    logger.info({ to, subject, text }, 'Email stubbed — RESEND_API_KEY not set');
     return;
   }
   const { error } = await resend.emails.send({ from: EMAIL_FROM, to, subject, html, text });

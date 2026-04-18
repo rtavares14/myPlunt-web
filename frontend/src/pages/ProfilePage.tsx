@@ -7,6 +7,7 @@ import Avatar from '@mui/material/Avatar';
 import Divider from '@mui/material/Divider';
 import Alert from '@mui/material/Alert';
 import Chip from '@mui/material/Chip';
+import TextField from '@mui/material/TextField';
 import LogoutIcon from '@mui/icons-material/Logout';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
@@ -18,6 +19,8 @@ function ProfilePage() {
   const navigate = useNavigate();
   const [linkError, setLinkError] = useState('');
   const [linkSuccess, setLinkSuccess] = useState(false);
+  const [linkPassword, setLinkPassword] = useState('');
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   const handleLogout = async () => {
     await logout();
@@ -40,21 +43,36 @@ function ProfilePage() {
     if (!resp.credential) return;
     setLinkError('');
     setLinkSuccess(false);
+    if (!linkPassword) {
+      setLinkError('Enter your current password to link Google');
+      return;
+    }
     try {
       const res = await authFetch('/api/auth/link-google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: resp.credential }),
+        body: JSON.stringify({ credential: resp.credential, currentPassword: linkPassword }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setLinkError(data.error || 'Failed to link Google account');
         return;
       }
+      setLinkPassword('');
       await refreshUser();
       setLinkSuccess(true);
     } catch {
       setLinkError('Unable to connect to server');
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResendState('sending');
+    try {
+      const res = await authFetch('/api/auth/resend-verification', { method: 'POST' });
+      setResendState(res.ok ? 'sent' : 'error');
+    } catch {
+      setResendState('error');
     }
   };
 
@@ -88,8 +106,27 @@ function ProfilePage() {
         </Box>
 
         {!user.emailVerified && (
-          <Alert severity="warning" className="!mt-4">
-            Your email isn't verified yet. Check your inbox for the verification link.
+          <Alert
+            severity={resendState === 'sent' ? 'success' : 'warning'}
+            className="!mt-4"
+            action={
+              resendState === 'sent' ? undefined : (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={handleResendVerification}
+                  disabled={resendState === 'sending'}
+                >
+                  {resendState === 'sending' ? 'Sending…' : 'Resend email'}
+                </Button>
+              )
+            }
+          >
+            {resendState === 'sent'
+              ? 'Verification email sent. Check your inbox.'
+              : resendState === 'error'
+                ? "Couldn't send the email. Try again in a minute."
+                : "Your email isn't verified yet. Check your inbox for the verification link."}
           </Alert>
         )}
 
@@ -132,7 +169,7 @@ function ProfilePage() {
           </Box>
         </Box>
 
-        {!user.hasGoogleLink && (
+        {!user.hasGoogleLink && user.hasPassword && (
           <Box className="mb-4">
             {linkError && (
               <Alert severity="error" className="!mb-2" onClose={() => setLinkError('')}>
@@ -144,6 +181,19 @@ function ProfilePage() {
                 Google account linked.
               </Alert>
             )}
+            <Typography variant="caption" className="!text-gray-500 !block !mb-2">
+              Confirm your current password before linking Google.
+            </Typography>
+            <TextField
+              type="password"
+              size="small"
+              fullWidth
+              placeholder="Current password"
+              value={linkPassword}
+              onChange={(e) => setLinkPassword(e.target.value)}
+              className="!mb-3"
+              autoComplete="current-password"
+            />
             <Box className="flex justify-center">
               <GoogleLogin
                 onSuccess={handleLinkGoogle}

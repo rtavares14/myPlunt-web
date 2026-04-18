@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { OAuth2Client } from 'google-auth-library';
 import { getPrisma } from '../lib/prisma';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, requireVerified } from '../middleware/auth';
 import {
   REFRESH_COOKIE_NAME,
   clearRefreshCookie,
@@ -89,6 +89,15 @@ const resetPasswordLimiter = rateLimit({
 const verifyEmailLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: byIp,
+  message: { error: 'Too many requests, try again later.' },
+});
+
+const resendVerificationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: byIp,
@@ -235,14 +244,14 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
 
     const verificationToken = await createAuthToken(user.id, 'EMAIL_VERIFICATION');
     sendVerificationEmail(user.email, verificationToken).catch((err) =>
-      console.error('Failed to send verification email:', err),
+      req.log.error({ err }, 'Failed to send verification email'),
     );
 
     const token = await issueTokens(req, res, user);
 
     res.status(201).json({ token, user: toPublicUser(user) });
-  } catch (error) {
-    console.error('Register error:', error);
+  } catch (err) {
+    req.log.error({ err }, 'Register error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -274,8 +283,8 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
 
     const token = await issueTokens(req, res, user);
     res.json({ token, user: toPublicUser(user) });
-  } catch (error) {
-    console.error('Login error:', error);
+  } catch (err) {
+    req.log.error({ err }, 'Login error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -329,7 +338,7 @@ router.post('/google', oauthLimiter, async (req: Request, res: Response) => {
       res.status(error.status).json({ error: error.message });
       return;
     }
-    console.error('Google sign-in error:', error);
+    req.log.error({ err: error }, 'Google sign-in error');
     res.status(401).json({ error: 'Google sign-in failed' });
   }
 });
@@ -366,8 +375,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
     }
 
     res.json({ token: rotated.accessToken, user: toPublicUser(rotated.user) });
-  } catch (error) {
-    console.error('Refresh error:', error);
+  } catch (err) {
+    req.log.error({ err }, 'Refresh error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -394,11 +403,43 @@ router.post('/verify-email', verifyEmailLimiter, async (req: Request, res: Respo
     });
 
     res.status(204).end();
-  } catch (error) {
-    console.error('Verify email error:', error);
+  } catch (err) {
+    req.log.error({ err }, 'Verify email error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// ─── Resend verification email ───────────────────────────
+
+router.post(
+  '/resend-verification',
+  resendVerificationLimiter,
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const user = await getPrisma().user.findUnique({
+        where: { id: req.user!.userId },
+      });
+
+      // Silently no-op if already verified — a button on the profile shouldn't
+      // leak timing differences based on current state.
+      if (!user || user.emailVerifiedAt) {
+        res.status(204).end();
+        return;
+      }
+
+      const token = await createAuthToken(user.id, 'EMAIL_VERIFICATION');
+      sendVerificationEmail(user.email, token).catch((err) =>
+        req.log.error({ err }, 'Failed to send verification email'),
+      );
+
+      res.status(204).end();
+    } catch (err) {
+      req.log.error({ err }, 'Resend verification error');
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);
 
 // ─── Password reset ──────────────────────────────────────
 
@@ -417,13 +458,13 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
     if (user?.password) {
       const token = await createAuthToken(user.id, 'PASSWORD_RESET');
       sendPasswordResetEmail(user.email, token).catch((err) =>
-        console.error('Failed to send password reset email:', err),
+        req.log.error({ err }, 'Failed to send password reset email'),
       );
     }
 
     res.status(204).end();
-  } catch (error) {
-    console.error('Forgot password error:', error);
+  } catch (err) {
+    req.log.error({ err }, 'Forgot password error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -460,8 +501,8 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
     });
 
     res.status(204).end();
-  } catch (error) {
-    console.error('Reset password error:', error);
+  } catch (err) {
+    req.log.error({ err }, 'Reset password error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -475,9 +516,28 @@ router.post('/link-google', oauthLimiter, authMiddleware, async (req: Request, r
       return;
     }
 
-    const { credential } = req.body;
+    const { credential, currentPassword } = req.body;
     if (!credential || typeof credential !== 'string') {
       res.status(400).json({ error: 'credential is required' });
+      return;
+    }
+    if (typeof currentPassword !== 'string' || !currentPassword) {
+      res.status(400).json({ error: 'currentPassword is required' });
+      return;
+    }
+
+    const currentUserId = req.user!.userId;
+    const prisma = getPrisma();
+    const currentUser = await prisma.user.findUnique({ where: { id: currentUserId } });
+
+    // Step-up: a stolen access token shouldn't be enough to attach an attacker's
+    // Google account onto the victim. Require the password to re-verify intent.
+    // Run bcrypt against DUMMY_PASSWORD_HASH when no password is set so response
+    // time doesn't distinguish "no password" from "wrong password".
+    const storedHash = currentUser?.password ?? DUMMY_PASSWORD_HASH;
+    const passwordValid = await bcrypt.compare(currentPassword, storedHash);
+    if (!currentUser || !currentUser.password || !passwordValid) {
+      res.status(401).json({ error: 'Current password is incorrect' });
       return;
     }
 
@@ -490,9 +550,6 @@ router.post('/link-google', oauthLimiter, authMiddleware, async (req: Request, r
       res.status(401).json({ error: 'Invalid or unverified Google account' });
       return;
     }
-
-    const currentUserId = req.user!.userId;
-    const prisma = getPrisma();
 
     const existing = await prisma.user.findUnique({ where: { googleId: payload.sub } });
     if (existing && existing.id !== currentUserId) {
@@ -509,8 +566,8 @@ router.post('/link-google', oauthLimiter, authMiddleware, async (req: Request, r
     });
 
     res.json({ user: toPublicUser(updated) });
-  } catch (error) {
-    console.error('Link Google error:', error);
+  } catch (err) {
+    req.log.error({ err }, 'Link Google error');
     res.status(500).json({ error: 'Failed to link Google account' });
   }
 });
@@ -525,8 +582,8 @@ router.post('/logout', async (req: Request, res: Response) => {
     }
     clearRefreshCookie(res);
     res.status(204).end();
-  } catch (error) {
-    console.error('Logout error:', error);
+  } catch (err) {
+    req.log.error({ err }, 'Logout error');
     clearRefreshCookie(res);
     res.status(204).end();
   }
