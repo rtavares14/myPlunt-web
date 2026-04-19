@@ -21,6 +21,11 @@ export const logger = pino({
     ? undefined
     : {
         target: 'pino-pretty',
-        options: { colorize: true, translateTime: 'SYS:HH:MM:ss' },
+        options: {
+          colorize: true,
+          translateTime: 'SYS:HH:MM:ss',
+          ignore: 'pid,hostname,req,res,responseTime,reqId',
+          singleLine: true,
+        },
       },
 });

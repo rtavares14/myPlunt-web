@@ -6,21 +6,14 @@ import Button from '@mui/material/Button';
 import Avatar from '@mui/material/Avatar';
 import Divider from '@mui/material/Divider';
 import Alert from '@mui/material/Alert';
-import Chip from '@mui/material/Chip';
-import TextField from '@mui/material/TextField';
 import LogoutIcon from '@mui/icons-material/Logout';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import SessionsSection from '../components/SessionsSection';
 
 function ProfilePage() {
-  const { user, logout, authFetch, refreshUser } = useAuth();
+  const { user, logout, authFetch } = useAuth();
   const navigate = useNavigate();
-  const [linkError, setLinkError] = useState('');
-  const [linkSuccess, setLinkSuccess] = useState(false);
-  const [linkPassword, setLinkPassword] = useState('');
   const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   const handleLogout = async () => {
@@ -39,33 +32,6 @@ function ProfilePage() {
     .join('')
     .toUpperCase()
     .slice(0, 2);
-
-  const handleLinkGoogle = async (resp: CredentialResponse) => {
-    if (!resp.credential) return;
-    setLinkError('');
-    setLinkSuccess(false);
-    if (!linkPassword) {
-      setLinkError('Enter your current password to link Google');
-      return;
-    }
-    try {
-      const res = await authFetch('/api/auth/link-google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: resp.credential, currentPassword: linkPassword }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setLinkError(data.error || 'Failed to link Google account');
-        return;
-      }
-      setLinkPassword('');
-      await refreshUser();
-      setLinkSuccess(true);
-    } catch {
-      setLinkError('Unable to connect to server');
-    }
-  };
 
   const handleResendVerification = async () => {
     setResendState('sending');
@@ -129,84 +95,6 @@ function ProfilePage() {
                 ? "Couldn't send the email. Try again in a minute."
                 : "Your email isn't verified yet. Check your inbox for the verification link."}
           </Alert>
-        )}
-
-        <Divider className="!my-6" />
-
-        <Typography variant="subtitle2" className="!font-bold !text-gray-700 !mb-3">
-          Account
-        </Typography>
-
-        <Box className="flex flex-col gap-2 mb-4">
-          <Box className="flex items-center justify-between">
-            <Typography variant="body2" className="!text-gray-600">
-              Email password
-            </Typography>
-            {user.hasPassword ? (
-              <Chip
-                icon={<CheckCircleIcon />}
-                label="Set"
-                size="small"
-                sx={{ backgroundColor: '#dcfce7', color: '#166534' }}
-              />
-            ) : (
-              <Chip label="Not set" size="small" variant="outlined" />
-            )}
-          </Box>
-          <Box className="flex items-center justify-between">
-            <Typography variant="body2" className="!text-gray-600">
-              Google
-            </Typography>
-            {user.hasGoogleLink ? (
-              <Chip
-                icon={<CheckCircleIcon />}
-                label="Linked"
-                size="small"
-                sx={{ backgroundColor: '#dcfce7', color: '#166534' }}
-              />
-            ) : (
-              <Chip label="Not linked" size="small" variant="outlined" />
-            )}
-          </Box>
-        </Box>
-
-        {!user.hasGoogleLink && user.hasPassword && (
-          <Box className="mb-4">
-            {linkError && (
-              <Alert severity="error" className="!mb-2" onClose={() => setLinkError('')}>
-                {linkError}
-              </Alert>
-            )}
-            {linkSuccess && (
-              <Alert severity="success" className="!mb-2" onClose={() => setLinkSuccess(false)}>
-                Google account linked.
-              </Alert>
-            )}
-            <Typography variant="caption" className="!text-gray-500 !block !mb-2">
-              Confirm your current password before linking Google.
-            </Typography>
-            <TextField
-              type="password"
-              size="small"
-              fullWidth
-              placeholder="Current password"
-              value={linkPassword}
-              onChange={(e) => setLinkPassword(e.target.value)}
-              className="!mb-3"
-              autoComplete="current-password"
-            />
-            <Box className="flex justify-center">
-              <GoogleLogin
-                onSuccess={handleLinkGoogle}
-                onError={() => setLinkError('Google sign-in failed')}
-                theme="outline"
-                size="large"
-                text="continue_with"
-                shape="rectangular"
-                width="356"
-              />
-            </Box>
-          </Box>
         )}
 
         <Divider className="!my-6" />

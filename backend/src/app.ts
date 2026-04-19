@@ -26,7 +26,27 @@ export function createApp() {
     allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
   }
 
-  app.use(pinoHttp({ logger }));
+  app.use(
+    pinoHttp({
+      logger,
+      customLogLevel: (_req, res, err) => {
+        if (err || res.statusCode >= 500) return 'error';
+        if (res.statusCode >= 400) return 'warn';
+        return 'info';
+      },
+      customSuccessMessage: (req, res, responseTime) =>
+        `${req.method} ${req.url} ${res.statusCode} ${responseTime}ms`,
+      customErrorMessage: (req, res, err) =>
+        `${req.method} ${req.url} ${res.statusCode} ${err.message}`,
+      serializers: {
+        req: (req) => ({ method: req.method, url: req.url }),
+        res: (res) => ({ statusCode: res.statusCode }),
+      },
+      autoLogging: {
+        ignore: (req) => req.url === '/api/health',
+      },
+    }),
+  );
   app.use(helmet());
   app.use(cors({ origin: allowedOrigins, credentials: true }));
   app.use(express.json({ limit: '100kb' }));
@@ -43,6 +63,14 @@ export function createApp() {
   });
 
   app.use('/api/auth', authRoutes);
+
+  // Safety net for any throw that escapes a route handler.
+  app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    req.log.error({ err }, 'Unhandled error');
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
 
   return app;
 }

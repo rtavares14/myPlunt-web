@@ -1,13 +1,7 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
 
-// HIBP is a live network call — mock it so tests don't flake on the API.
-vi.mock('../src/lib/pwnedPasswords', () => ({
-  isPasswordPwned: vi.fn(async () => false),
-}));
-
-import { isPasswordPwned } from '../src/lib/pwnedPasswords';
 import { createApp } from '../src/app';
 import { getPrisma } from '../src/lib/prisma';
 
@@ -45,13 +39,6 @@ describe('POST /api/auth/register', () => {
     const setCookie = res.headers['set-cookie'];
     const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
     expect(cookies.some((c) => c && c.startsWith('plunt_refresh='))).toBe(true);
-  });
-
-  it('rejects a password that appears in breach data', async () => {
-    vi.mocked(isPasswordPwned).mockResolvedValueOnce(true);
-    const { res } = await register({ password: 'password123' });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/breach/i);
   });
 
   it('rejects duplicate emails with 409', async () => {

@@ -16,9 +16,8 @@ import {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendPasswordChangedEmail,
+  sendWelcomeEmail,
 } from '../lib/email';
-import { isPasswordPwned } from '../lib/pwnedPasswords';
-
 const router = Router();
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -128,14 +127,6 @@ const oauthLimiter = rateLimit({
   message: { error: 'Too many requests, try again later.' },
 });
 
-class OauthLinkError extends Error {
-  status: number;
-  constructor(message: string, status = 409) {
-    super(message);
-    this.status = status;
-  }
-}
-
 function toPublicUser(u: {
   id: string;
   email: string;
@@ -169,29 +160,28 @@ async function upsertGoogleUser(params: {
 
   // Does anyone already own this Google account? If so, that's the user.
   const byGoogleId = await prisma.user.findUnique({ where: { googleId } });
-  if (byGoogleId) return byGoogleId;
+  if (byGoogleId) return { user: byGoogleId, created: false };
 
   const byEmail = await prisma.user.findUnique({ where: { email } });
   if (byEmail) {
-    // Refuse to auto-link onto a password account — without email verification
-    // on our side, anyone could pre-register a victim's email and hijack the account
-    // the moment the real owner first uses Google sign-in. The legitimate owner
-    // can log in with their password and link Google from their profile.
-    if (byEmail.password) {
-      throw new OauthLinkError(
-        'An account with this email already exists. Please sign in with your password first, then link your Google account.',
-      );
-    }
-    // Email exists without password or Google link (e.g. an Apple-only user).
-    // Safe to attach Google here since the only way to have reached this row
-    // is by already controlling its previously-verified provider.
-    return prisma.user.update({
+    // Google's `email_verified` already proved the current caller controls this
+    // inbox, so attaching Google to the matching row is safe. If the row has a
+    // password but was never email-verified, we can't trust that password was
+    // set by the real owner (pre-registration hijack vector) — drop it.
+    const shouldClearPassword = byEmail.password !== null && byEmail.emailVerifiedAt === null;
+    const updated = await prisma.user.update({
       where: { id: byEmail.id },
-      data: { googleId, avatarUrl: avatarUrl ?? byEmail.avatarUrl },
+      data: {
+        googleId,
+        avatarUrl: avatarUrl ?? byEmail.avatarUrl,
+        emailVerifiedAt: byEmail.emailVerifiedAt ?? new Date(),
+        ...(shouldClearPassword ? { password: null } : {}),
+      },
     });
+    return { user: updated, created: false };
   }
 
-  return prisma.user.create({
+  const created = await prisma.user.create({
     data: {
       email,
       name,
@@ -201,6 +191,7 @@ async function upsertGoogleUser(params: {
       emailVerifiedAt: new Date(),
     },
   });
+  return { user: created, created: true };
 }
 
 // ─── Register (email + password) ─────────────────────────
@@ -229,12 +220,6 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
     }
     if (typeof password !== 'string' || password.length < 8 || password.length > 72) {
       res.status(400).json({ error: 'Password must be between 8 and 72 characters' });
-      return;
-    }
-    if (await isPasswordPwned(password)) {
-      res.status(400).json({
-        error: 'This password has appeared in known data breaches. Please choose a different one.',
-      });
       return;
     }
 
@@ -345,20 +330,22 @@ router.post('/google', oauthLimiter, async (req: Request, res: Response) => {
       return;
     }
 
-    const user = await upsertGoogleUser({
+    const { user, created } = await upsertGoogleUser({
       email: normalizedEmail,
       name: payload.name || normalizedEmail.split('@')[0],
       googleId: payload.sub,
       avatarUrl: payload.picture ?? null,
     });
 
+    if (created) {
+      sendWelcomeEmail(user.email, user.name).catch((err) =>
+        req.log.error({ err }, 'Failed to send welcome email'),
+      );
+    }
+
     const token = await issueTokens(req, res, user);
     res.json({ token, user: toPublicUser(user) });
   } catch (error) {
-    if (error instanceof OauthLinkError) {
-      res.status(error.status).json({ error: error.message });
-      return;
-    }
     req.log.error({ err: error }, 'Google sign-in error');
     res.status(401).json({ error: 'Google sign-in failed' });
   }
@@ -499,12 +486,6 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
     }
     if (password.length < 8 || password.length > 72) {
       res.status(400).json({ error: 'Password must be between 8 and 72 characters' });
-      return;
-    }
-    if (await isPasswordPwned(password)) {
-      res.status(400).json({
-        error: 'This password has appeared in known data breaches. Please choose a different one.',
-      });
       return;
     }
 

@@ -14,7 +14,7 @@ type Status = 'pending' | 'success' | 'error';
 function VerifyEmailPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [status, setStatus] = useState<Status>('pending');
   const [error, setError] = useState('');
   const didRun = useRef(false);
@@ -77,14 +77,16 @@ function VerifyEmailPage() {
               Email verified
             </Typography>
             <Typography variant="body2" className="!text-gray-500 !mt-2">
-              You're all set. Welcome to Plunt.
+              {user
+                ? "You're all set. Welcome to Plunt."
+                : 'Your email is confirmed. Sign in to continue.'}
             </Typography>
             <Button
               variant="contained"
-              onClick={() => navigate('/')}
+              onClick={() => navigate(user ? '/' : '/auth')}
               sx={{ mt: 3, textTransform: 'none', backgroundColor: '#16a34a' }}
             >
-              Continue
+              {user ? 'Go to your plants' : 'Sign in'}
             </Button>
           </>
         )}
