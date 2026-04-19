@@ -1,78 +1,69 @@
-# Plunt
+# myPlunt 
 
-A social app for plant lovers. Connect with friends, share your plant collections, track watering schedules, and get weather-based care alerts all in a private, friends-only env.
+> A private social app for plant lovers share your collection, track watering, and keep your plants thriving together with friends.
 
-## What is Plunt?
+**Status: Pre-launch.** The waitlist is live at [myplunt.com](https://myplunt.com).
+---
 
-Plunt helps plant enthusiasts manage and share their plant collections with friends. There is no public visibility, only users who are connected as friends can view each other's plants and planters.
+## What is myPlunt?
 
-### Core Features
+myPlunt is a friends-only plant tracking app built for people who genuinely care about their plants not just for aesthetic posts.
 
-- **Plant Management** — Track your plants with species info, watering history, images, and environmental thresholds (temperature, humidity, frost resistance)
-- **Planters** — Organize plants into indoor or outdoor containers
-- **Friend System** — Send/accept/block friend requests. Friends get full access to each other's plant collections
-- **Watering Reminders** — Per-plant watering intervals with social nudges (remind a friend to water their plant)
-- **Plant Gallery** — Multiple images per plant via Cloudinary, with a primary image for cards and a full gallery in detail view
-- **Location-Based Weather** — Each plant has its own city-based location for accurate weather monitoring and care alerts
+Most plant apps are either overly clinical (spreadsheets with leaves) or social-media-style (public posts chasing likes). myPlunt sits in between: it gives you the tools to actually look after your plants, and lets you share that experience privately with the people you choose.
 
-## Tech Stack
+There is no public feed. No followers, no strangers browsing your collection. Everything stays between you and the friends you connect with. You can see what they're growing, remind each other to water, and swap advice all in a space that feels more like a group chat than a social network.
 
-### Frontend
-- React 19 + TypeScript
-- Vite
-- MUI v9 (Material UI)
-- Tailwind CSS v3
+Under the hood, myPlunt tracks watering schedules, environmental thresholds (temperature, humidity, frost risk), and plant images. It ties each plant to a real city location so it can factor in local weather when flagging care alerts. Whether you have three succulents on a windowsill or a full indoor jungle, the goal is the same: keep your plants alive and make it a little more fun to do it with friends.
 
-### Backend
-- Node.js + TypeScript
-- Express 5
-- Prisma ORM
-- PostgreSQL 16
+### Features
 
-### Infrastructure
-- Docker (PostgreSQL)
-- Cloudinary (image storage)
+| Feature | Description |
+|---|---|
+| **Plant tracking** | Species, watering history, images, acquisition date |
+| **Planters** | Group plants into indoor or outdoor containers |
+| **Friend system** | Send, accept, or block friend requests. Friends see each other's full collection |
+| **Watering reminders** | Per-plant intervals with social nudges — remind a friend to water |
+| **Plant gallery** | Multiple Cloudinary images per plant, one marked as primary |
+| **Weather alerts** | City-based location per plant for temperature, humidity, and frost monitoring |
+| **Waitlist** | Pre-launch email capture so early supporters get notified on launch |
 
-## Getting Started
+---
 
-### Prerequisites
-- Node.js 18+
-- npm
-- Docker
+## Colour Palette
 
-### Setup
+All brand colours live in `frontend/tailwind.config.js`. Change them there and they propagate everywhere.
 
-```bash
-# Clone the repo
-git clone https://github.com/YOUR_USERNAME/Plunt-SPT.git
-cd Plunt-SPT
+| Token | Hex | Usage |
+|---|---|---|
+| `cream` | `#ebe1d3` | Page background |
+| `green-main` | `#14532d` | Headings, primary text |
+| `green-second` | `#0f7033` | Navbar, buttons |
+| `green-light` | `#2e7d52` | Subtitles, accents |
 
-# Install frontend
-cd frontend
-npm install
+> The two MUI theme colours in `frontend/src/App.tsx` mirror `green-main` and `green-second` — update both if you change the palette.
 
-# Install backend
-cd ../backend
-npm install
-cp .env.example .env  # Configure your environment variables
-```
+---
 
-### Running Locally
+## API Endpoints
 
-```bash
-# Backend (starts Docker Postgres automatically)
-cd backend
-npm run dev    # http://localhost:3001
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/health` | Health check |
+| `POST` | `/api/waitlist` | Register waitlist email |
 
-# Frontend (in a separate terminal)
-cd frontend
-npm run dev    # http://localhost:5173
-```
+---
 
-### Database
+## Roadmap
 
-```bash
-# Run from backend/
-npx prisma migrate dev --name init   # Create and apply migrations
-npx prisma studio                     # Visual database browser
-```
+- [ ] Auth (sign up / log in)
+- [ ] Plant CRUD with Cloudinary image upload
+- [ ] Planter management
+- [ ] Friend requests & social feed
+- [ ] Watering reminders
+- [ ] Weather-based care alerts
+
+---
+
+## License
+
+Private — all rights reserved.

@@ -2,41 +2,47 @@ import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
-import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
-import Avatar from '@mui/material/Avatar';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import YardIcon from '@mui/icons-material/Yard';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import PeopleIcon from '@mui/icons-material/People';
 
+const navButtonClass =
+  'hover:!bg-cream hover:!text-green-main !bg-green-second !text-cream disabled:!opacity-60 disabled:!text-cream';
+
 function Navbar() {
   return (
-    <AppBar position="sticky" sx={{ backgroundColor: '#15803d' }}>
+    <AppBar position="fixed" className="!bg-green-second">
       <Toolbar className="flex justify-between">
-        <Box className="flex items-center gap-2">
+        <Box className="flex items-center gap-2 text-cream">
           <YardIcon />
           <Typography variant="h6" component="span" className="!font-bold">
             Plunt
           </Typography>
         </Box>
 
-        <Box className="flex items-center gap-1">
-          <IconButton color="inherit">
+        <Box className="flex items-center gap-2">
+          <IconButton
+            disabled
+            aria-label="Friends (coming soon)"
+            className={navButtonClass}
+          >
             <PeopleIcon />
           </IconButton>
-
-          <IconButton color="inherit">
-            <Badge badgeContent={0} color="error">
-              <NotificationsIcon />
-            </Badge>
+          <IconButton
+            disabled
+            aria-label="Notifications (coming soon)"
+            className={navButtonClass}
+          >
+            <NotificationsIcon />
           </IconButton>
-
-          <IconButton className="!ml-1">
-            <Avatar
-              sx={{ width: 32, height: 32, bgcolor: '#dcfce7', color: '#166534' }}
-            >
-              U
-            </Avatar>
+          <IconButton
+            disabled
+            aria-label="Account (coming soon)"
+            className={navButtonClass}
+          >
+            <AccountCircleIcon />
           </IconButton>
         </Box>
       </Toolbar>
