@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from './generated/prisma/client';
 
@@ -12,8 +13,13 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
-app.use(cors());
-app.use(express.json());
+const corsOrigin = process.env.CORS_ORIGIN;
+app.use(
+  cors({
+    origin: corsOrigin ? corsOrigin.split(',').map((o) => o.trim()) : true,
+  })
+);
+app.use(express.json({ limit: '10kb' }));
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', message: 'Plunt API is running' });
@@ -21,7 +27,15 @@ app.get('/api/health', (_req, res) => {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-app.post('/api/waitlist', async (req, res) => {
+const waitlistLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many signups — please try again in a minute' },
+});
+
+app.post('/api/waitlist', waitlistLimiter, async (req, res) => {
   const rawEmail = typeof req.body?.email === 'string' ? req.body.email : '';
   const email = rawEmail.trim().toLowerCase();
 
@@ -47,7 +61,9 @@ const server = app.listen(PORT, () => {
 
 async function shutdown(signal: string) {
   console.log(`${signal} received, shutting down`);
-  server.close();
+  await new Promise<void>((resolve, reject) =>
+    server.close((err) => (err ? reject(err) : resolve()))
+  );
   await prisma.$disconnect();
   process.exit(0);
 }

@@ -9,7 +9,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import PeopleIcon from '@mui/icons-material/People';
 
 const navButtonClass =
-  'hover:!bg-cream hover:!text-green-main !bg-green-second !text-cream';
+  'hover:!bg-cream hover:!text-green-main !bg-green-second !text-cream disabled:!opacity-60 disabled:!text-cream';
 
 function Navbar() {
   return (
@@ -23,13 +23,25 @@ function Navbar() {
         </Box>
 
         <Box className="flex items-center gap-2">
-          <IconButton aria-label="Friends" className={navButtonClass}>
+          <IconButton
+            disabled
+            aria-label="Friends (coming soon)"
+            className={navButtonClass}
+          >
             <PeopleIcon />
           </IconButton>
-          <IconButton aria-label="Notifications" className={navButtonClass}>
+          <IconButton
+            disabled
+            aria-label="Notifications (coming soon)"
+            className={navButtonClass}
+          >
             <NotificationsIcon />
           </IconButton>
-          <IconButton aria-label="Account" className={navButtonClass}>
+          <IconButton
+            disabled
+            aria-label="Account (coming soon)"
+            className={navButtonClass}
+          >
             <AccountCircleIcon />
           </IconButton>
         </Box>

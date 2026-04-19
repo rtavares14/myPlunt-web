@@ -87,7 +87,12 @@ function LandingPage() {
               size="small"
               placeholder="you@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (status.kind !== 'submitting' && status.kind !== 'idle') {
+                  setStatus({ kind: 'idle' });
+                }
+              }}
               disabled={isSubmitting}
               slotProps={{ htmlInput: { 'aria-label': 'Email address' } }}
               sx={(theme) => {
@@ -110,7 +115,7 @@ function LandingPage() {
               type="submit"
               variant="contained"
               color="primary"
-              disabled={isSubmitting || email.length === 0}
+              disabled={isSubmitting || email.trim().length === 0}
               className="!whitespace-nowrap"
               sx={{ textTransform: 'none', minWidth: 130 }}
             >
