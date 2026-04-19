@@ -1,4 +1,3 @@
-import { Fragment } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
@@ -9,35 +8,8 @@ import YardIcon from '@mui/icons-material/Yard';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import PeopleIcon from '@mui/icons-material/People';
 
-const navItems = [
-  {
-    key: 'friends',
-    show: true,
-    node: (
-      <IconButton className="hover:!bg-cream hover:!text-green-main !bg-green-second !text-cream">
-        <PeopleIcon />
-      </IconButton>
-    ),
-  },
-  {
-    key: 'notifications',
-    show: true,
-    node: (
-      <IconButton className="hover:!bg-cream hover:!text-green-main !bg-green-second !text-cream">
-        <NotificationsIcon />
-      </IconButton>
-    ),
-  },
-  {
-    key: 'avatar',
-    show: true,
-    node: (
-      <IconButton className="hover:!bg-cream hover:!text-green-main !bg-green-second !text-cream">
-        <AccountCircleIcon />
-      </IconButton>
-    ),
-  },
-];
+const navButtonClass =
+  'hover:!bg-cream hover:!text-green-main !bg-green-second !text-cream';
 
 function Navbar() {
   return (
@@ -51,9 +23,15 @@ function Navbar() {
         </Box>
 
         <Box className="flex items-center gap-2">
-          {navItems.map(({ key, show, node }) =>
-            show ? <Fragment key={key}>{node}</Fragment> : null
-          )}
+          <IconButton aria-label="Friends" className={navButtonClass}>
+            <PeopleIcon />
+          </IconButton>
+          <IconButton aria-label="Notifications" className={navButtonClass}>
+            <NotificationsIcon />
+          </IconButton>
+          <IconButton aria-label="Account" className={navButtonClass}>
+            <AccountCircleIcon />
+          </IconButton>
         </Box>
       </Toolbar>
     </AppBar>

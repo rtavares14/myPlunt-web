@@ -65,7 +65,7 @@ function LandingPage() {
           >
             Connecting plant lovers everywhere
           </Typography>
-          <Box className="w-160 h-1 bg-green-second mx-auto rounded-full mb-6" />
+          <Box className="w-16 h-1 bg-green-second mx-auto rounded-full mb-6" />
           <Typography
             variant="h6"
             className="!text-gray-600 !mb-6 !font-light"
@@ -90,16 +90,20 @@ function LandingPage() {
               onChange={(e) => setEmail(e.target.value)}
               disabled={isSubmitting}
               slotProps={{ htmlInput: { 'aria-label': 'Email address' } }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  backgroundColor: '#ebe1d3',
-                  '&:hover': { backgroundColor: '#ebe1d3' },
-                  '&.Mui-focused': { backgroundColor: '#ebe1d3' },
-                },
-                '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus': {
-                  WebkitBoxShadow: '0 0 0 1000px #ebe1d3 inset',
-                  WebkitTextFillColor: 'inherit',
-                },
+              sx={(theme) => {
+                const cream = theme.palette.background.default;
+                return {
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: cream,
+                    '&:hover': { backgroundColor: cream },
+                    '&.Mui-focused': { backgroundColor: cream },
+                  },
+                  '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus':
+                    {
+                      WebkitBoxShadow: `0 0 0 1000px ${cream} inset`,
+                      WebkitTextFillColor: 'inherit',
+                    },
+                };
               }}
             />
             <Button
