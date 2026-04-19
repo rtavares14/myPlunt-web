@@ -13,6 +13,8 @@ type Status =
   | { kind: 'success'; alreadyRegistered: boolean }
   | { kind: 'error'; message: string };
 
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+
 function errorMessage(status: number, serverMessage?: string): string {
   if (status === 400) return serverMessage ?? "That email doesn't look right.";
   if (status === 429) return "Too many tries give it a minute and try again.";
@@ -29,7 +31,7 @@ function LandingPage() {
     setStatus({ kind: 'submitting' });
 
     try {
-      const response = await fetch('/api/waitlist', {
+      const response = await fetch(`${API_BASE}/api/waitlist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
