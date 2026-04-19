@@ -125,6 +125,16 @@ model PlantImage {
   @@map("plant_images")
 }
 
+// ─── Waitlist ────────────────────────────────────────────
+
+model WaitlistEntry {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("waitlist_entries")
+}
+
 // ─── Watering Reminders ──────────────────────────────────
 
 model WateringReminder {
