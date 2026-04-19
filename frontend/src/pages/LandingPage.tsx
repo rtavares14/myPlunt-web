@@ -13,6 +13,13 @@ type Status =
   | { kind: 'success'; alreadyRegistered: boolean }
   | { kind: 'error'; message: string };
 
+function errorMessage(status: number, serverMessage?: string): string {
+  if (status === 400) return serverMessage ?? "That email doesn't look right.";
+  if (status === 429) return "Too many tries give it a minute and try again.";
+  if (status >= 500) return "Our server is having a moment. Please try again later.";
+  return serverMessage ?? "Something didn't work. Please try again.";
+}
+
 function LandingPage() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
@@ -31,14 +38,17 @@ function LandingPage() {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setStatus({ kind: 'error', message: data?.error ?? 'Something went wrong' });
+        setStatus({ kind: 'error', message: errorMessage(response.status, data?.error) });
         return;
       }
 
       setStatus({ kind: 'success', alreadyRegistered: Boolean(data?.alreadyRegistered) });
       setEmail('');
     } catch {
-      setStatus({ kind: 'error', message: 'Network error — please try again' });
+      setStatus({
+        kind: 'error',
+        message: "Couldn't reach the server. Check your connection and try again.",
+      });
     }
   }
 
@@ -104,10 +114,10 @@ function LandingPage() {
                     '&.Mui-focused': { backgroundColor: cream },
                   },
                   '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus':
-                    {
-                      WebkitBoxShadow: `0 0 0 1000px ${cream} inset`,
-                      WebkitTextFillColor: 'inherit',
-                    },
+                  {
+                    WebkitBoxShadow: `0 0 0 1000px ${cream} inset`,
+                    WebkitTextFillColor: 'inherit',
+                  },
                 };
               }}
             />
