@@ -60,7 +60,9 @@ jobs:
         run: npm run lint
 
       - name: Build
-        run: npx tsc --noEmit
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
 
   tests:
     name: Tests (beta → main only)
