@@ -10,20 +10,30 @@ datasource db {
 // ─── Users ───────────────────────────────────────────────
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  password  String
-  avatarUrl String?
-  bio       String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String    @id @default(uuid())
+  name            String
+  username        String    @unique
+  email           String    @unique
+  password        String?
+  googleId        String?   @unique
+  appleId         String?   @unique
+  avatarUrl       String?
+  bio             String?
+  city            String?
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  plants   Plant[]
-  planters Planter[]
+  plants     Plant[]
+  planters   Planter[]
+  sessions   Session[]
+  authTokens AuthToken[]
 
   sentRequests     Friendship[] @relation("FriendshipRequester")
   receivedRequests Friendship[] @relation("FriendshipAddressee")
+
+  blockedUsers UserBlock[] @relation("Blocker")
+  blockedBy    UserBlock[] @relation("Blocked")
 
   sentReminders     WateringReminder[] @relation("ReminderSender")
   receivedReminders WateringReminder[] @relation("ReminderReceiver")
@@ -31,12 +41,139 @@ model User {
   @@map("users")
 }
 
+// ─── Auth tokens (email verify, password reset) ──────────
+
+enum TokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+
+  @@map("token_purpose")
+}
+
+model AuthToken {
+  id        String       @id @default(uuid())
+  userId    String
+  tokenHash String       @unique
+  purpose   TokenPurpose
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("auth_tokens")
+}
+
+// ─── Sessions (refresh tokens) ───────────────────────────
+
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ip               String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ─── Plants ──────────────────────────────────────────────
+
+enum Sunlight {
+  HIGH
+  MEDIUM
+  LOW
+
+  @@map("sunlight")
+}
+
+model Plant {
+  id                   String    @id @default(uuid())
+  ownerId              String
+  planterId            String?
+  name                 String
+  species              String?
+  isDead               Boolean   @default(false)
+  wateringIntervalDays Int       @default(7)
+  sunlight             Sunlight  @default(MEDIUM)
+  minTemp              Float?
+  maxTemp              Float?
+  lastWateredAt        DateTime?
+  dateAcquired         DateTime  @default(now())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  owner        User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  planter      Planter?           @relation(fields: [planterId], references: [id], onDelete: SetNull)
+  images       PlantImage[]
+  wateringLogs WateringLog[]
+  reminders    WateringReminder[]
+
+  @@index([ownerId])
+  @@map("plants")
+}
+
+// ─── Planters ────────────────────────────────────────────
+
+model Planter {
+  id          String   @id @default(uuid())
+  ownerId     String
+  name        String
+  description String?
+  isIndoor    Boolean  @default(true)
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner  User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  plants Plant[]
+
+  @@index([ownerId])
+  @@map("planters")
+}
+
+// ─── Watering Log ────────────────────────────────────────
+
+model WateringLog {
+  id        String   @id @default(uuid())
+  plantId   String
+  notes     String?
+  wateredAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  plant Plant @relation(fields: [plantId], references: [id], onDelete: Cascade)
+
+  @@map("watering_logs")
+}
+
+// ─── Plant Images ────────────────────────────────────────
+
+model PlantImage {
+  id        String   @id @default(uuid())
+  plantId   String
+  url       String
+  createdAt DateTime @default(now())
+
+  plant Plant @relation(fields: [plantId], references: [id], onDelete: Cascade)
+
+  @@map("plant_images")
+}
+
 // ─── Friendships ─────────────────────────────────────────
 
 enum FriendshipStatus {
   PENDING
   ACCEPTED
-  BLOCKED
+  DECLINED
+
+  @@map("friendship_status")
 }
 
 model Friendship {
@@ -44,85 +181,29 @@ model Friendship {
   requesterId String
   addresseeId String
   status      FriendshipStatus @default(PENDING)
-  createdAt   DateTime         @default(now())
+  sentAt      DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id])
-  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id])
+  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
 
   @@unique([requesterId, addresseeId])
   @@map("friendships")
 }
 
-// ─── Planters ────────────────────────────────────────────
+// ─── User Blocks ─────────────────────────────────────────
 
-model Planter {
-  id       String  @id @default(uuid())
-  name     String
-  isIndoor Boolean @default(true)
-  ownerId  String
+model UserBlock {
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  blockedAt DateTime @default(now())
 
-  owner    User    @relation(fields: [ownerId], references: [id])
-  plants   Plant[]
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("planters")
-}
-
-// ─── Plants ──────────────────────────────────────────────
-
-model Plant {
-  id           String    @id @default(uuid())
-  name         String
-  species      String?
-  dateAcquired DateTime  @default(now())
-  lastWatered  DateTime?
-  isDead       Boolean   @default(false)
-
-  // Watering reminder threshold (days). Default 7 if not set.
-  wateringIntervalDays Int @default(7)
-
-  // Location
-  city      String?
-
-  // Environmental thresholds
-  minTemp             Float?
-  maxTemp             Float?
-  minHumidity         Float?
-  maxHumidity         Float?
-  isFrostResistant    Boolean @default(false)
-
-  // Relations
-  ownerId   String
-  planterId String?
-
-  owner   User     @relation(fields: [ownerId], references: [id])
-  planter Planter? @relation(fields: [planterId], references: [id])
-  images  PlantImage[]
-
-  reminders WateringReminder[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("plants")
-}
-
-// ─── Plant Images ────────────────────────────────────────
-
-model PlantImage {
-  id        String  @id @default(uuid())
-  url       String  // Cloudinary URL
-  isPrimary Boolean @default(false)
-  plantId   String
-
-  plant Plant @relation(fields: [plantId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-
-  @@map("plant_images")
+  @@unique([blockerId, blockedId])
+  @@map("user_blocks")
 }
 
 // ─── Waitlist ────────────────────────────────────────────
@@ -138,16 +219,17 @@ model WaitlistEntry {
 // ─── Watering Reminders ──────────────────────────────────
 
 model WateringReminder {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
   senderId   String
   receiverId String
   plantId    String
   message    String?
-  createdAt  DateTime @default(now())
+  sentAt     DateTime  @default(now())
+  readAt     DateTime?
 
-  sender   User  @relation("ReminderSender", fields: [senderId], references: [id])
-  receiver User  @relation("ReminderReceiver", fields: [receiverId], references: [id])
-  plant    Plant @relation(fields: [plantId], references: [id])
+  sender   User  @relation("ReminderSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User  @relation("ReminderReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  plant    Plant @relation(fields: [plantId], references: [id], onDelete: Cascade)
 
   @@map("watering_reminders")
 }

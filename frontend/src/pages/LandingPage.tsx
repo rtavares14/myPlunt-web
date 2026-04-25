@@ -1,60 +1,14 @@
-import { useState, type FormEvent } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Container from '@mui/material/Container';
-import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
-import Alert from '@mui/material/Alert';
 import YardIcon from '@mui/icons-material/Yard';
-
-type Status =
-  | { kind: 'idle' }
-  | { kind: 'submitting' }
-  | { kind: 'success'; alreadyRegistered: boolean }
-  | { kind: 'error'; message: string };
-
-const API_BASE = import.meta.env.VITE_API_URL ?? '';
-
-function errorMessage(status: number, serverMessage?: string): string {
-  if (status === 400) return serverMessage ?? "That email doesn't look right.";
-  if (status === 429) return "Too many tries give it a minute and try again.";
-  if (status >= 500) return "Our server is having a moment. Please try again later.";
-  return serverMessage ?? "Something didn't work. Please try again.";
-}
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/useAuth';
 
 function LandingPage() {
-  const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<Status>({ kind: 'idle' });
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setStatus({ kind: 'submitting' });
-
-    try {
-      const response = await fetch(`${API_BASE}/api/waitlist`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        setStatus({ kind: 'error', message: errorMessage(response.status, data?.error) });
-        return;
-      }
-
-      setStatus({ kind: 'success', alreadyRegistered: Boolean(data?.alreadyRegistered) });
-      setEmail('');
-    } catch {
-      setStatus({
-        kind: 'error',
-        message: "Couldn't reach the server. Check your connection and try again.",
-      });
-    }
-  }
-
-  const isSubmitting = status.kind === 'submitting';
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     <Box className="flex-1 bg-cream flex items-center justify-center">
@@ -69,7 +23,7 @@ function LandingPage() {
             component="h1"
             className="!font-bold !mb-4 !text-green-main"
           >
-            Welcome to myPlunt
+            {user ? `Welcome, ${user.name}` : 'Welcome to Plunt'}
           </Typography>
           <Typography
             variant="h5"
@@ -77,75 +31,24 @@ function LandingPage() {
           >
             Connecting plant lovers everywhere
           </Typography>
-          <Box className="w-16 h-1 bg-green-second mx-auto rounded-full mb-6" />
-          <Typography
-            variant="h6"
-            className="!text-gray-600 !mb-6 !font-light"
-          >
-            We're launching soon (I hope....)
-            <br />
-            Join the waitlist to be the first to know.
-          </Typography>
-
-          <Box
-            component="form"
-            onSubmit={handleSubmit}
-            className="flex flex-col sm:flex-row gap-3 justify-center items-stretch max-w-md mx-auto"
-          >
-            <TextField
-              type="email"
-              required
-              fullWidth
-              size="small"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                if (status.kind !== 'submitting' && status.kind !== 'idle') {
-                  setStatus({ kind: 'idle' });
-                }
-              }}
-              disabled={isSubmitting}
-              slotProps={{ htmlInput: { 'aria-label': 'Email address' } }}
-              sx={(theme) => {
-                const cream = theme.palette.background.default;
-                return {
-                  '& .MuiOutlinedInput-root': {
-                    backgroundColor: cream,
-                    '&:hover': { backgroundColor: cream },
-                    '&.Mui-focused': { backgroundColor: cream },
-                  },
-                  '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus':
-                  {
-                    WebkitBoxShadow: `0 0 0 1000px ${cream} inset`,
-                    WebkitTextFillColor: 'inherit',
-                  },
-                };
-              }}
-            />
+          <Box className="w-16 h-1 bg-plunt-400 mx-auto rounded-full mb-6" />
+          {!user && (
             <Button
-              type="submit"
               variant="contained"
-              color="primary"
-              disabled={isSubmitting || email.trim().length === 0}
-              className="!whitespace-nowrap"
-              sx={{ textTransform: 'none', minWidth: 130 }}
+              size="large"
+              onClick={() => navigate('/auth')}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 4,
+                py: 1.5,
+                fontSize: '1.1rem',
+                backgroundColor: '#16a34a',
+                '&:hover': { backgroundColor: '#15803d' },
+              }}
             >
-              {isSubmitting ? 'Joining…' : 'Join waitlist'}
+              Get Started
             </Button>
-          </Box>
-
-          {status.kind === 'success' && (
-            <Alert severity="success" className="!mt-4 !text-left">
-              {status.alreadyRegistered
-                ? "You're already on the list — we'll be in touch soon."
-                : "You're in! We'll email you when Plunt is live."}
-            </Alert>
-          )}
-          {status.kind === 'error' && (
-            <Alert severity="error" className="!mt-4 !text-left">
-              {status.message}
-            </Alert>
           )}
         </Box>
       </Container>
