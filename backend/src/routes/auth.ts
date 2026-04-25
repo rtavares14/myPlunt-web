@@ -1,9 +1,11 @@
+import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { OAuth2Client } from 'google-auth-library';
 import { getPrisma } from '../lib/prisma';
-import { authMiddleware } from '../middleware/auth';
+import { Prisma } from '../generated/prisma/client';
+import { authMiddleware, requireVerified } from '../middleware/auth';
 import {
   REFRESH_COOKIE_NAME,
   clearRefreshCookie,
@@ -185,13 +187,38 @@ async function upsertGoogleUser(params: {
     data: {
       email,
       name,
-      username: email.split('@')[0] + '_' + Date.now().toString(36),
+      username: await generateUniqueUsername(email),
       googleId,
       avatarUrl: avatarUrl ?? null,
       emailVerifiedAt: new Date(),
     },
   });
   return { user: created, created: true };
+}
+
+async function generateUniqueUsername(email: string): Promise<string> {
+  const prisma = getPrisma();
+  const localPart = email.split('@')[0] ?? 'user';
+  const base = localPart
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 12) || 'user';
+
+  // Try the bare base first, then append short random suffixes until a free slot
+  // appears. Bounded retries since the namespace is huge and collisions are rare.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate =
+      attempt === 0
+        ? (base.length >= 3 ? base : `${base}_user`).slice(0, 20)
+        : `${base.slice(0, 14)}_${crypto.randomBytes(3).toString('hex')}`;
+    if (!USERNAME_RE.test(candidate) || RESERVED_USERNAMES.has(candidate)) continue;
+    const taken = await prisma.user.findUnique({ where: { username: candidate } });
+    if (!taken) return candidate;
+  }
+  // Fall back to a fully-random username — vanishingly unlikely to collide.
+  return `user_${crypto.randomBytes(6).toString('hex')}`;
 }
 
 // ─── Register (email + password) ─────────────────────────
@@ -223,30 +250,27 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
       return;
     }
 
-    const existing = await getPrisma().user.findUnique({ where: { email: normalizedEmail } });
-    if (existing) {
-      res.status(409).json({ error: 'Email already in use' });
-      return;
-    }
-
-    const existingUsername = await getPrisma().user.findUnique({
-      where: { username: normalizedUsername },
-    });
-    if (existingUsername) {
-      res.status(409).json({ error: 'Username already taken' });
-      return;
-    }
-
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const user = await getPrisma().user.create({
-      data: {
-        email: normalizedEmail,
-        name: trimmedName,
-        username: normalizedUsername,
-        password: hashedPassword,
-      },
-    });
+    let user;
+    try {
+      user = await getPrisma().user.create({
+        data: {
+          email: normalizedEmail,
+          name: trimmedName,
+          username: normalizedUsername,
+          password: hashedPassword,
+        },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const target = (err.meta?.target as string[] | undefined) ?? [];
+        const field = target.includes('username') ? 'Username already taken' : 'Email already in use';
+        res.status(409).json({ error: field });
+        return;
+      }
+      throw err;
+    }
 
     const verificationToken = await createAuthToken(user.id, 'EMAIL_VERIFICATION');
     sendVerificationEmail(user.email, verificationToken).catch((err) =>
@@ -522,7 +546,7 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
 
 // ─── Link Google to the currently signed-in account ──────
 
-router.post('/link-google', oauthLimiter, authMiddleware, async (req: Request, res: Response) => {
+router.post('/link-google', oauthLimiter, authMiddleware, requireVerified, async (req: Request, res: Response) => {
   try {
     if (!googleClient) {
       res.status(503).json({ error: 'Google sign-in is not configured on the server' });

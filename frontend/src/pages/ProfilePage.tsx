@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -16,15 +16,16 @@ function ProfilePage() {
   const navigate = useNavigate();
   const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
+  useEffect(() => {
+    if (!user) navigate('/auth');
+  }, [user, navigate]);
+
   const handleLogout = async () => {
     await logout();
     navigate('/');
   };
 
-  if (!user) {
-    navigate('/auth');
-    return null;
-  }
+  if (!user) return null;
 
   const initials = user.name
     .split(' ')

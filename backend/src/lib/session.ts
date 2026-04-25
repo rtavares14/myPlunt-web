@@ -77,30 +77,42 @@ export async function rotateSession(
   presentedToken: string,
 ): Promise<{ accessToken: string; user: UserModel } | null> {
   const prisma = getPrisma();
-  const session = await prisma.session.findUnique({
-    where: { refreshTokenHash: hashRefreshToken(presentedToken) },
-    include: { user: true },
-  });
+  const tokenHash = hashRefreshToken(presentedToken);
 
-  if (!session) return null;
+  // Atomic-revoke gate: only one concurrent /refresh with the same cookie wins.
+  // If two requests race, exactly one updateMany affects 1 row; the other gets 0
+  // and is treated like reuse of an already-revoked token.
+  const result = await prisma.$transaction(async (tx) => {
+    const session = await tx.session.findUnique({
+      where: { refreshTokenHash: tokenHash },
+      include: { user: true },
+    });
 
-  if (session.revokedAt) {
-    await prisma.session.updateMany({
-      where: { userId: session.userId, revokedAt: null },
+    if (!session) return { kind: 'unknown' as const };
+
+    if (session.revokedAt) {
+      await tx.session.updateMany({
+        where: { userId: session.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return { kind: 'reuse' as const };
+    }
+
+    if (session.expiresAt < new Date()) return { kind: 'expired' as const };
+
+    const revoke = await tx.session.updateMany({
+      where: { id: session.id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
-    return null;
-  }
+    if (revoke.count !== 1) return { kind: 'raced' as const };
 
-  if (session.expiresAt < new Date()) return null;
-
-  await prisma.session.update({
-    where: { id: session.id },
-    data: { revokedAt: new Date() },
+    return { kind: 'ok' as const, user: session.user };
   });
 
-  const accessToken = await issueTokens(req, res, session.user);
-  return { accessToken, user: session.user };
+  if (result.kind !== 'ok') return null;
+
+  const accessToken = await issueTokens(req, res, result.user);
+  return { accessToken, user: result.user };
 }
 
 export async function revokeSessionByToken(presentedToken: string): Promise<void> {

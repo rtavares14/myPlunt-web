@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -51,7 +51,7 @@ export default function SessionsSection() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const res = await authFetch('/api/auth/sessions');
       if (!res.ok) {
@@ -64,12 +64,11 @@ export default function SessionsSection() {
     } catch {
       setError('Unable to connect to server');
     }
-  };
+  }, [authFetch]);
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void load();
+  }, [load]);
 
   const revoke = async (id: string) => {
     setBusy(id);
