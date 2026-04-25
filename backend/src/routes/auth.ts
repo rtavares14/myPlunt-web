@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { OAuth2Client } from 'google-auth-library';
 import { getPrisma } from '../lib/prisma';
-import { authMiddleware, requireVerified } from '../middleware/auth';
+import { authMiddleware } from '../middleware/auth';
 import {
   REFRESH_COOKIE_NAME,
   clearRefreshCookie,
@@ -48,8 +48,8 @@ function normalizeUsername(username: unknown): string | null {
 }
 
 // Per-route rate limiters. keyed by IP, or IP+email for credential/email flows.
-const byIp = (req: Request, res: Response) => ipKeyGenerator(req.ip ?? '', 56);
-const byIpAndEmail = (req: Request, res: Response) => {
+const byIp = (req: Request, _res: Response) => ipKeyGenerator(req.ip ?? '', 56);
+const byIpAndEmail = (req: Request, _res: Response) => {
   const email = normalizeEmail(req.body?.email) ?? '';
   return `${ipKeyGenerator(req.ip ?? '', 56)}|${email}`;
 };

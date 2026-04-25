@@ -1,30 +1,8 @@
-import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  avatarUrl?: string | null;
-  emailVerified: boolean;
-  hasPassword: boolean;
-  hasGoogleLink: boolean;
-  hasAppleLink: boolean;
-}
-
-interface AuthContextValue {
-  user: User | null;
-  token: string | null;
-  loading: boolean;
-  login: (token: string, user: User) => void;
-  logout: () => Promise<void>;
-  refreshUser: () => Promise<string | null>;
-  authFetch: (input: string, init?: RequestInit) => Promise<Response>;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { AuthContext, type AuthUser } from './authContextValue';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const tokenRef = useRef<string | null>(null);
@@ -66,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = (newToken: string, newUser: User) => {
+  const login = (newToken: string, newUser: AuthUser) => {
     setToken(newToken);
     setUser(newUser);
   };
@@ -110,10 +88,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
 }

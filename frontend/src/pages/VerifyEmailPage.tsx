@@ -7,7 +7,7 @@ import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 type Status = 'pending' | 'success' | 'error';
 
@@ -15,8 +15,9 @@ function VerifyEmailPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
-  const [status, setStatus] = useState<Status>('pending');
-  const [error, setError] = useState('');
+  const token = params.get('token');
+  const [status, setStatus] = useState<Status>(token ? 'pending' : 'error');
+  const [error, setError] = useState(token ? '' : 'Missing verification token');
   const didRun = useRef(false);
 
   useEffect(() => {
@@ -25,19 +26,14 @@ function VerifyEmailPage() {
     if (didRun.current) return;
     didRun.current = true;
 
-    const token = params.get('token');
-    if (!token) {
-      setStatus('error');
-      setError('Missing verification token');
-      return;
-    }
+    if (!token) return;
 
     (async () => {
       try {
         const res = await fetch('/api/auth/verify-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token: token! }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -54,7 +50,7 @@ function VerifyEmailPage() {
         setStatus('error');
       }
     })();
-  }, [params, refreshUser]);
+  }, [token, refreshUser]);
 
   return (
     <Box className="min-h-screen bg-gradient-to-br from-plunt-50 via-white to-plunt-100 flex items-center justify-center px-4">

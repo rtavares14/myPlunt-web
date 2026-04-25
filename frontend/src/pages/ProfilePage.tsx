@@ -8,7 +8,7 @@ import Divider from '@mui/material/Divider';
 import Alert from '@mui/material/Alert';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import SessionsSection from '../components/SessionsSection';
 
 function ProfilePage() {

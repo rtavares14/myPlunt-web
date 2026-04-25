@@ -8,7 +8,7 @@ import YardIcon from '@mui/icons-material/Yard';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import PeopleIcon from '@mui/icons-material/People';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 const navButtonClass =
   'hover:!bg-cream hover:!text-green-main !bg-green-second !text-cream disabled:!opacity-60 disabled:!text-cream';

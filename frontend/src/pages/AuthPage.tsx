@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -16,7 +16,7 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import AppleIcon from '@mui/icons-material/Apple';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 
 const APPLE_SIGNIN_ENABLED = import.meta.env.VITE_APPLE_SIGNIN_ENABLED === 'true';
 
@@ -26,11 +26,6 @@ function AuthPage() {
   const navigate = useNavigate();
   const { user, login } = useAuth();
 
-  // Already logged in — go home
-  if (user) {
-    navigate('/');
-    return null;
-  }
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -39,6 +34,13 @@ function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Already logged in — go home
+  useEffect(() => {
+    if (user) navigate('/');
+  }, [user, navigate]);
+
+  if (user) return null;
 
   const toggleMode = () => {
     setMode(mode === 'login' ? 'signup' : 'login');
