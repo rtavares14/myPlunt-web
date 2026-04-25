@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 import authRoutes from './routes/auth';
+import waitlistRoutes from './routes/waitlist';
 import { getPrisma } from './lib/prisma';
 import { logger } from './lib/logger';
 
@@ -63,6 +64,7 @@ export function createApp() {
   });
 
   app.use('/api/auth', authRoutes);
+  app.use('/api/waitlist', waitlistRoutes);
 
   // Safety net for any throw that escapes a route handler.
   app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -102,6 +102,20 @@ Stores Cloudinary image URLs for a plant. Supports multiple images with a primar
 
 ---
 
+## WaitlistEntry
+
+Pre-launch email signups collected from the public landing page so we can notify subscribers when Plunt goes live.
+
+| Column    | Type     | Constraints        |
+|-----------|----------|--------------------|
+| id        | UUID     | PK, auto-generated |
+| email     | String   | Unique, required   |
+| createdAt | DateTime | Auto               |
+
+**Notes:** No relation to `User` — these are anonymous prospects, not registered accounts.
+
+---
+
 ## WateringReminder
 
 Social reminders sent between friends when a plant needs watering.

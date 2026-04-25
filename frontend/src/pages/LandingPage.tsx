@@ -11,23 +11,23 @@ function LandingPage() {
   const { user } = useAuth();
 
   return (
-    <Box className="flex-1 bg-gradient-to-br from-plunt-50 via-white to-plunt-100 flex items-center justify-center">
+    <Box className="flex-1 bg-cream flex items-center justify-center">
       <Container maxWidth="sm">
         <Box className="text-center p-8">
           <YardIcon
             sx={{ fontSize: 80 }}
-            className="text-plunt-600 mb-4"
+            className="text-green-second mb-4"
           />
           <Typography
             variant="h2"
             component="h1"
-            className="!font-bold !mb-4 !text-plunt-900"
+            className="!font-bold !mb-4 !text-green-main"
           >
             {user ? `Welcome, ${user.name}` : 'Welcome to Plunt'}
           </Typography>
           <Typography
             variant="h5"
-            className="!text-plunt-700 !mb-6"
+            className="!text-green-light !mb-6 !font-light"
           >
             Connecting plant lovers everywhere
           </Typography>
