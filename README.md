@@ -29,41 +29,6 @@ Under the hood, myPlunt tracks watering schedules, environmental thresholds (tem
 
 ---
 
-## Colour Palette
-
-All brand colours live in `frontend/tailwind.config.js`. Change them there and they propagate everywhere.
-
-| Token | Hex | Usage |
-|---|---|---|
-| `cream` | `#ebe1d3` | Page background |
-| `green-main` | `#14532d` | Headings, primary text |
-| `green-second` | `#0f7033` | Navbar, buttons |
-| `green-light` | `#2e7d52` | Subtitles, accents |
-
-> The two MUI theme colours in `frontend/src/App.tsx` mirror `green-main` and `green-second` — update both if you change the palette.
-
----
-
-## API Endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/health` | Health check |
-| `POST` | `/api/waitlist` | Register waitlist email |
-
----
-
-## Roadmap
-
-- [ ] Auth (sign up / log in)
-- [ ] Plant CRUD with Cloudinary image upload
-- [ ] Planter management
-- [ ] Friend requests & social feed
-- [ ] Watering reminders
-- [ ] Weather-based care alerts
-
----
-
 ## License
 
 Private — all rights reserved.
